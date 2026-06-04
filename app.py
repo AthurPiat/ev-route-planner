@@ -109,6 +109,7 @@ st.set_page_config(
     page_title="EV Route Planner",
     page_icon="assets/logo-qivia.png",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # PWA hints: when added to the iOS/Android home screen, opens fullscreen with
@@ -161,15 +162,32 @@ st.markdown(
     @media (min-width: 768px) {
         header[data-testid="stHeader"] { display: none !important; }
     }
-    /* On mobile, make the header blend with the dark theme. */
+    /* On mobile, force the header to be visible with the dark theme. */
     @media (max-width: 767px) {
         header[data-testid="stHeader"] {
+            display: flex !important;
             background-color: #03060D !important;
+            height: 3rem !important;
         }
+        header[data-testid="stHeader"] *,
         header[data-testid="stHeader"] button,
         header[data-testid="stHeader"] svg {
             color: #FFFFFF !important;
             fill: #FFFFFF !important;
+        }
+        /* The sidebar toggle button — make it clearly tappable. */
+        [data-testid="stSidebarCollapsedControl"],
+        button[kind="header"] {
+            background-color: #5FFFA7 !important;
+            color: #03060D !important;
+            border-radius: 8px !important;
+            padding: 0.4rem !important;
+            margin: 0.4rem !important;
+        }
+        [data-testid="stSidebarCollapsedControl"] svg,
+        button[kind="header"] svg {
+            fill: #03060D !important;
+            color: #03060D !important;
         }
     }
     div[data-testid="stToolbar"] { display: none !important; }

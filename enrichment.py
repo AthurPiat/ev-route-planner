@@ -103,44 +103,53 @@ def _interp(km: float, samples: list[WeatherSample]) -> WeatherSample:
 
 # ---------- External APIs ----------
 
-def fetch_elevations(coords: list[tuple[float, float]]) -> list[float]:
-    """OpenTopoData. Batched at 100 per request."""
+def fetch_elevations(coords: list[tuple[float, float]]) -> list[float] | None:
+    """OpenTopoData. Batched at 100 per request. Returns None on failure."""
     elevations: list[float] = []
-    for i in range(0, len(coords), ELEVATION_MAX_POINTS):
-        batch = coords[i : i + ELEVATION_MAX_POINTS]
-        locs = "|".join(f"{lat:.5f},{lng:.5f}" for lat, lng in batch)
+    try:
+        for i in range(0, len(coords), ELEVATION_MAX_POINTS):
+            batch = coords[i : i + ELEVATION_MAX_POINTS]
+            locs = "|".join(f"{lat:.5f},{lng:.5f}" for lat, lng in batch)
+            r = requests.get(
+                "https://api.opentopodata.org/v1/srtm30m",
+                params={"locations": locs},
+                timeout=30,
+            )
+            r.raise_for_status()
+            data = r.json()
+            for entry in data.get("results", []):
+                elev = entry.get("elevation")
+                elevations.append(0.0 if elev is None else float(elev))
+        return elevations
+    except Exception as e:
+        print(f"[opentopodata] {e}")
+        return None
+
+
+def fetch_weather(lat: float, lng: float) -> dict | None:
+    """Open-Meteo current conditions. Returns None on any failure (502, timeout…)
+    so the caller can decide to skip rather than crash."""
+    try:
         r = requests.get(
-            "https://api.opentopodata.org/v1/srtm30m",
-            params={"locations": locs},
-            timeout=30,
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": lat,
+                "longitude": lng,
+                "current": "temperature_2m,wind_speed_10m,wind_direction_10m",
+                "wind_speed_unit": "kmh",
+            },
+            timeout=15,
         )
         r.raise_for_status()
-        data = r.json()
-        for entry in data.get("results", []):
-            elev = entry.get("elevation")
-            elevations.append(0.0 if elev is None else float(elev))
-    return elevations
-
-
-def fetch_weather(lat: float, lng: float) -> dict:
-    """Open-Meteo current conditions."""
-    r = requests.get(
-        "https://api.open-meteo.com/v1/forecast",
-        params={
-            "latitude": lat,
-            "longitude": lng,
-            "current": "temperature_2m,wind_speed_10m,wind_direction_10m",
-            "wind_speed_unit": "kmh",
-        },
-        timeout=15,
-    )
-    r.raise_for_status()
-    cur = r.json().get("current", {})
-    return {
-        "temp_c": float(cur.get("temperature_2m", 20.0)),
-        "wind_speed_kmh": float(cur.get("wind_speed_10m", 0.0)),
-        "wind_dir_deg": float(cur.get("wind_direction_10m", 0.0)),
-    }
+        cur = r.json().get("current", {})
+        return {
+            "temp_c": float(cur.get("temperature_2m", 20.0)),
+            "wind_speed_kmh": float(cur.get("wind_speed_10m", 0.0)),
+            "wind_dir_deg": float(cur.get("wind_direction_10m", 0.0)),
+        }
+    except Exception as e:
+        print(f"[open-meteo] {e}")
+        return None
 
 
 # ---------- Orchestration ----------
@@ -168,9 +177,13 @@ def enrich_route(
         sample_idx = _sample_indices(n, ELEVATION_MAX_POINTS)
         sample_coords = [coords[i] for i in sample_idx]
         sample_elevs = fetch_elevations(sample_coords)
+        if sample_elevs is None:
+            # API down — skip elevation correction silently.
+            use_elevation = False
+            sample_elevs = []
         # Linear interpolation of elevation back to all n points (by index along route).
         sample_kms = [pts[i].km for i in sample_idx]
-        for p in pts:
+        for p in pts if use_elevation else []:
             # Find surrounding samples.
             if p.km <= sample_kms[0]:
                 elevations.append(sample_elevs[0])
@@ -196,14 +209,19 @@ def enrich_route(
         sample_idx = _sample_indices(n, WEATHER_SAMPLES)
         for i in sample_idx:
             w = fetch_weather(coords[i][0], coords[i][1])
+            if w is None:
+                continue  # tolerate transient API failures
             weather.append(WeatherSample(
                 km=pts[i].km,
                 temp_c=w["temp_c"],
                 wind_speed_kmh=w["wind_speed_kmh"],
                 wind_dir_deg=w["wind_dir_deg"],
             ))
-        meta["avg_temp_c"] = sum(w.temp_c for w in weather) / len(weather)
-        meta["avg_wind_kmh"] = sum(w.wind_speed_kmh for w in weather) / len(weather)
+        if not weather:
+            use_weather = False  # all samples failed — skip weather correction
+        else:
+            meta["avg_temp_c"] = sum(w.temp_c for w in weather) / len(weather)
+            meta["avg_wind_kmh"] = sum(w.wind_speed_kmh for w in weather) / len(weather)
 
     # Recompute SoC. We track both clamped soc_pct (for display) and unclamped
     # cumulative kWh consumed (for the planner).

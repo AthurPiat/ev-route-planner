@@ -156,9 +156,31 @@ st.markdown(
         color: #FFFFFF;
     }
 
-    /* Hide Streamlit's top header (the white bar). */
-    header[data-testid="stHeader"] { display: none !important; }
+    /* Streamlit's top header: hide on desktop (the white bar), keep on mobile
+       because it contains the sidebar toggle (hamburger/arrow). */
+    @media (min-width: 768px) {
+        header[data-testid="stHeader"] { display: none !important; }
+    }
+    /* On mobile, make the header blend with the dark theme. */
+    @media (max-width: 767px) {
+        header[data-testid="stHeader"] {
+            background-color: #03060D !important;
+        }
+        header[data-testid="stHeader"] button,
+        header[data-testid="stHeader"] svg {
+            color: #FFFFFF !important;
+            fill: #FFFFFF !important;
+        }
+    }
     div[data-testid="stToolbar"] { display: none !important; }
+
+    /* Mobile-friendly grid: stop cards stack vertically on small screens. */
+    @media (max-width: 767px) {
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 0 0 100% !important;
+        }
+    }
 
     /* Primary buttons: mint on dark text. */
     .stButton > button[kind="primary"] {
@@ -270,7 +292,34 @@ def _check_password() -> None:
         unsafe_allow_html=True,
     )
     st.markdown('<div class="qivia-accent"></div>', unsafe_allow_html=True)
-    pwd = st.text_input("Code d'accès", type="password", key="access_pwd")
+    # Stronger styling so the input is clearly visible on dark mobile screens.
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stTextInput"] input {
+            background-color: #0B111C !important;
+            color: #FFFFFF !important;
+            border: 2px solid #5FFFA7 !important;
+            border-radius: 8px !important;
+            padding: 0.75rem 1rem !important;
+            font-size: 1.05rem !important;
+        }
+        div[data-testid="stTextInput"] label {
+            color: #FFFFFF !important;
+            font-size: 1rem !important;
+            font-weight: 600 !important;
+            margin-bottom: 0.5rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    pwd = st.text_input(
+        "🔒 Code d'accès",
+        type="password",
+        key="access_pwd",
+        placeholder="Tape ton code et appuie sur Entrée",
+    )
     if pwd:
         if hashlib.sha256(pwd.encode()).hexdigest() == expected:
             st.session_state["auth_ok"] = True

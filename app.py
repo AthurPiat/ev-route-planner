@@ -138,6 +138,15 @@ st.markdown(
     html, body, .stApp, p, label, button, input, textarea, select, div, span {
         font-family: 'Plus Jakarta Sans', -apple-system, sans-serif !important;
     }
+    /* Preserve Streamlit's Material Symbols icons (expander chevron, etc.) */
+    [class*="material-symbols"],
+    [class*="material-icons"],
+    span.material-symbols-outlined,
+    span.material-symbols-rounded,
+    span.material-icons {
+        font-family: 'Material Symbols Outlined', 'Material Symbols Rounded',
+                     'Material Icons' !important;
+    }
     h1, h2, h3, h4 {
         font-weight: 700 !important;
         letter-spacing: -0.02em;
@@ -159,11 +168,17 @@ st.markdown(
         margin: -0.4rem 0 1.4rem 0;
     }
 
-    /* Hide Streamlit chrome on desktop; keep on mobile (toolbar bar) */
-    @media (min-width: 768px) {
-        header[data-testid="stHeader"] { display: none !important; }
-    }
+    /* Hide Streamlit chrome — no sidebar to toggle, so we don't need the header */
+    header[data-testid="stHeader"] { display: none !important; }
     div[data-testid="stToolbar"] { display: none !important; }
+
+    /* Tighten the top padding so content starts near the top */
+    .main .block-container,
+    section[data-testid="stMain"] > div:first-child,
+    [data-testid="stAppViewContainer"] .block-container {
+        padding-top: 1.2rem !important;
+        padding-bottom: 2rem !important;
+    }
 
     /* Inputs (text, password, etc.) */
     input, textarea {

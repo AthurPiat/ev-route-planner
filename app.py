@@ -73,22 +73,41 @@ def photon_search(query: str) -> list[tuple[str, str]]:
     except Exception as e:
         print(f"[photon] {e}")
         return []
+    # OSM categories that already represent a whole locality — no need to add
+    # a postcode (Photon returns a semicolon-joined list of all postcodes anyway).
+    LOCALITY_TYPES = {
+        "city", "town", "village", "hamlet", "municipality",
+        "suburb", "neighbourhood", "state", "region", "country",
+    }
     results = []
     for f in data.get("features", []):
         props = f.get("properties", {})
         lng, lat = f["geometry"]["coordinates"]
-        parts = []
-        if props.get("name"):
-            parts.append(props["name"])
-        loc = []
-        if props.get("postcode"):
-            loc.append(props["postcode"])
-        if props.get("city") and props.get("city") != props.get("name"):
-            loc.append(props["city"])
-        if loc:
-            parts.append(" ".join(loc))
-        if props.get("country"):
-            parts.append(props["country"])
+        name = (props.get("name") or "").strip()
+        city = (props.get("city") or "").strip()
+        postcode = (props.get("postcode") or "").strip()
+        country = (props.get("country") or "").strip()
+        osm_value = (props.get("osm_value") or "").lower()
+
+        # Drop messy multi-postcode values like "06000;06100;06200;06300".
+        if ";" in postcode:
+            postcode = ""
+
+        parts: list[str] = []
+        if name:
+            parts.append(name)
+        # Only add postcode/city detail for street-level or specific places,
+        # not for whole cities/regions.
+        if osm_value not in LOCALITY_TYPES:
+            loc_bits = []
+            if postcode:
+                loc_bits.append(postcode)
+            if city and city != name:
+                loc_bits.append(city)
+            if loc_bits:
+                parts.append(" ".join(loc_bits))
+        if country:
+            parts.append(country)
         label = ", ".join(parts) if parts else f"{lat:.3f}, {lng:.3f}"
         results.append((label, f"{lat:.6f},{lng:.6f}"))
     return results
@@ -235,11 +254,41 @@ st.markdown(
     /* Folium iframe blends into the dark page */
     iframe { background-color: #03060D !important; }
 
-    /* streamlit-searchbox internals (react-select) — already handled via style_overrides,
-       but reset any leftover from previous edits. */
-    [class*="-control"], [class*="-menu"], [class*="-option"] {
+    /* streamlit-searchbox dropdown styling — proper container + spacing for options. */
+    [class*="-menu"] {
+        background-color: #0B111C !important;
+        border: 1px solid #2A3344 !important;
+        border-radius: 8px !important;
+        margin-top: 4px !important;
+        overflow: hidden !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+    }
+    [class*="-menuList"] {
+        background-color: #0B111C !important;
+        max-height: 280px !important;
+        padding: 4px 0 !important;
+    }
+    [class*="-option"] {
         background-color: #0B111C !important;
         color: #FFFFFF !important;
+        padding: 10px 14px !important;
+        cursor: pointer !important;
+        border-bottom: 1px solid #1A2030 !important;
+        font-size: 0.92rem !important;
+        line-height: 1.3 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    [class*="-option"]:last-child { border-bottom: none !important; }
+    [class*="-option"]:hover,
+    [class*="-option--is-focused"] {
+        background-color: #1A2030 !important;
+    }
+    [class*="-control"] {
+        background-color: #0B111C !important;
+        color: #FFFFFF !important;
+        border-color: #2A3344 !important;
     }
 
     /* Tabs styling */

@@ -529,9 +529,15 @@ def render_trip_body(
     if not plan.feasible:
         st.error(f"Trajet non réalisable : {plan.reason}")
 
-    # Map
+    # Map. Downsample the polyline to ~80 segments so folium HTML stays small
+    # and the iframe initializes in <500ms (vs ~3-4s on full resolution).
     m = folium.Map(tiles="CartoDB dark_matter")
-    pts = plan.updated_points
+    pts_full = plan.updated_points
+    TARGET_SEGMENTS = 80
+    step = max(1, len(pts_full) // TARGET_SEGMENTS)
+    pts = pts_full[::step]
+    if pts and pts[-1] is not pts_full[-1]:
+        pts.append(pts_full[-1])
     all_lats, all_lngs = [], []
     for i in range(len(pts) - 1):
         a, b = pts[i], pts[i + 1]
@@ -675,9 +681,15 @@ def render_trip(  # kept for backward compat — wraps render_trip_body
     if not plan.feasible:
         st.error(f"Trajet non réalisable : {plan.reason}")
 
-    # Map
+    # Map. Downsample the polyline to ~80 segments so folium HTML stays small
+    # and the iframe initializes in <500ms (vs ~3-4s on full resolution).
     m = folium.Map(tiles="CartoDB dark_matter")
-    pts = plan.updated_points
+    pts_full = plan.updated_points
+    TARGET_SEGMENTS = 80
+    step = max(1, len(pts_full) // TARGET_SEGMENTS)
+    pts = pts_full[::step]
+    if pts and pts[-1] is not pts_full[-1]:
+        pts.append(pts_full[-1])
     all_lats, all_lngs = [], []
     for i in range(len(pts) - 1):
         a, b = pts[i], pts[i + 1]

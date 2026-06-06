@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import requests
@@ -203,22 +204,27 @@ def enrich_route(
             max(0.0, elevations[i] - elevations[i - 1]) for i in range(1, n)
         )
 
-    # Weather samples.
+    # Weather samples — fetched in parallel to minimize latency.
     weather: list[WeatherSample] = []
     if use_weather:
         sample_idx = _sample_indices(n, WEATHER_SAMPLES)
-        for i in sample_idx:
+        def _fetch_at(i: int):
             w = fetch_weather(coords[i][0], coords[i][1])
             if w is None:
-                continue  # tolerate transient API failures
-            weather.append(WeatherSample(
+                return None
+            return WeatherSample(
                 km=pts[i].km,
                 temp_c=w["temp_c"],
                 wind_speed_kmh=w["wind_speed_kmh"],
                 wind_dir_deg=w["wind_dir_deg"],
-            ))
+            )
+
+        with ThreadPoolExecutor(max_workers=min(8, len(sample_idx))) as ex:
+            weather = [w for w in ex.map(_fetch_at, sample_idx) if w is not None]
+        weather.sort(key=lambda w: w.km)
+
         if not weather:
-            use_weather = False  # all samples failed — skip weather correction
+            use_weather = False
         else:
             meta["avg_temp_c"] = sum(w.temp_c for w in weather) / len(weather)
             meta["avg_wind_kmh"] = sum(w.wind_speed_kmh for w in weather) / len(weather)

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import folium
 import pandas as pd
@@ -82,6 +83,10 @@ def photon_search(query: str) -> list[tuple[str, str]]:
     results = []
     for f in data.get("features", []):
         props = f.get("properties", {})
+        # Keep only French addresses.
+        country = (props.get("country") or "").strip().lower()
+        if country and country not in ("france", "frankreich", "frança"):
+            continue
         lng, lat = f["geometry"]["coordinates"]
         name = (props.get("name") or "").strip()
         street = (props.get("street") or "").strip()
@@ -837,8 +842,12 @@ def compute_pipeline(inputs: dict) -> dict:
         m["stations"] = df
         return result, m, df
 
-    result_toll, meta_toll, df_toll = pipeline(avoid_tolls=False)
-    result_notoll, meta_notoll, df_notoll = pipeline(avoid_tolls=True)
+    # Run the two HERE routes in parallel — biggest single time saver.
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_toll = ex.submit(pipeline, False)
+        f_notoll = ex.submit(pipeline, True)
+        result_toll, meta_toll, df_toll = f_toll.result()
+        result_notoll, meta_notoll, df_notoll = f_notoll.result()
 
     # Compute all 4 (mode, toll) combinations so the result page can toggle freely.
     plan_fast_toll = plan_trip(result_toll, df_toll, model, initial_soc_pct=soc, mode="fast")
@@ -858,8 +867,7 @@ def compute_pipeline(inputs: dict) -> dict:
     tomtom_key = get_secret("TOMTOM_API_KEY")
 
     def enrich_stops(plan, df_src):
-        extras, total = [], 0.0
-        for s in plan.stops:
+        def process(s):
             avail = fetch_availability(s.lat, s.lng, s.name, tomtom_key or "")
             tarif_text = None
             if not df_src.empty and "tarification" in df_src.columns:
@@ -870,14 +878,26 @@ def compute_pipeline(inputs: dict) -> dict:
                 if not near.empty:
                     tarif_text = near.iloc[0].get("tarification")
             cost = estimate_stop_cost(s.operator, s.power_kw, s.kwh_added, tarif_text)
-            extras.append({"availability": avail, "cost": cost})
-            total += cost["total_eur"]
+            return {"availability": avail, "cost": cost}
+
+        if not plan.stops:
+            return [], 0.0
+        # 6 stops × 2 API calls = 12 network ops. Run them concurrently.
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            extras = list(ex.map(process, plan.stops))
+        total = sum(e["cost"]["total_eur"] for e in extras)
         return extras, total
 
-    extras_fast_toll, rc_fast_toll = enrich_stops(plan_fast_toll, df_toll)
-    extras_fast_notoll, rc_fast_notoll = enrich_stops(plan_fast_notoll, df_notoll)
-    extras_eco_toll, rc_eco_toll = enrich_stops(plan_eco_toll, df_toll)
-    extras_eco_notoll, rc_eco_notoll = enrich_stops(plan_eco_notoll, df_notoll)
+    # Run all 4 enrichment passes in parallel.
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        f1 = ex.submit(enrich_stops, plan_fast_toll, df_toll)
+        f2 = ex.submit(enrich_stops, plan_fast_notoll, df_notoll)
+        f3 = ex.submit(enrich_stops, plan_eco_toll, df_toll)
+        f4 = ex.submit(enrich_stops, plan_eco_notoll, df_notoll)
+        extras_fast_toll, rc_fast_toll = f1.result()
+        extras_fast_notoll, rc_fast_notoll = f2.result()
+        extras_eco_toll, rc_eco_toll = f3.result()
+        extras_eco_notoll, rc_eco_notoll = f4.result()
 
     return {
         "origin": origin_coords,

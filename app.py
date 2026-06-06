@@ -14,7 +14,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from streamlit_folium import st_folium
-from streamlit_geolocation import streamlit_geolocation
+from streamlit_js_eval import get_geolocation
 from streamlit_searchbox import st_searchbox
 
 from availability import fetch_availability
@@ -138,6 +138,49 @@ def _parse_coords(value: str | None) -> tuple[float, float] | None:
         return float(a), float(b)
     except ValueError:
         return None
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _reverse_geocode(lat: float, lng: float) -> str:
+    """Convert coordinates to a clean human-readable address via Photon."""
+    try:
+        r = requests.get(
+            "https://photon.komoot.io/reverse",
+            params={"lat": lat, "lon": lng, "lang": "fr"},
+            timeout=5,
+            headers={"User-Agent": "ev-route-planner/0.1"},
+        )
+        r.raise_for_status()
+        features = r.json().get("features", [])
+        if not features:
+            return f"{lat:.4f}, {lng:.4f}"
+        props = features[0].get("properties", {})
+        housenumber = (props.get("housenumber") or "").strip()
+        street = (props.get("street") or "").strip()
+        name = (props.get("name") or "").strip()
+        city = (props.get("city") or "").strip()
+        postcode = (props.get("postcode") or "").strip()
+        if ";" in postcode:
+            postcode = ""
+        if housenumber and street:
+            primary = f"{housenumber} {street}"
+        elif street:
+            primary = street
+        else:
+            primary = name or ""
+        parts: list[str] = []
+        if primary:
+            parts.append(primary)
+        loc_bits: list[str] = []
+        if postcode:
+            loc_bits.append(postcode)
+        if city and city != primary:
+            loc_bits.append(city)
+        if loc_bits:
+            parts.append(" ".join(loc_bits))
+        return ", ".join(parts) if parts else f"{lat:.4f}, {lng:.4f}"
+    except Exception:
+        return f"{lat:.4f}, {lng:.4f}"
 
 
 def soc_color(soc: float) -> str:
@@ -461,32 +504,37 @@ def render_input_view() -> None:
     _render_header()
 
     with st.expander("Mon trajet", expanded=True):
-        st.caption("Départ")
-        departure_mode = st.radio(
-            "Choix du mode de départ",
-            ["📍 Ma position", "✍️ Une adresse"],
-            horizontal=True,
-            key="departure_mode",
-            label_visibility="collapsed",
-        )
+        # Silent auto-geolocation on the very first load. The browser shows
+        # its native permission prompt; if accepted, we reverse-geocode the
+        # coords to a clean human-readable address.
+        if "geoloc_attempted" not in st.session_state:
+            loc = get_geolocation()
+            st.session_state.geoloc_attempted = True
+            if loc and loc.get("coords"):
+                lat = float(loc["coords"]["latitude"])
+                lng = float(loc["coords"]["longitude"])
+                st.session_state.geoloc_coords = f"{lat:.6f},{lng:.6f}"
+                st.session_state.geoloc_label = _reverse_geocode(lat, lng)
 
-        if departure_mode == "📍 Ma position":
-            st.caption("Touche le bouton et autorise l'accès à ta position.")
-            loc = streamlit_geolocation()
-            if loc and loc.get("latitude") is not None:
-                origin = f"{float(loc['latitude']):.6f},{float(loc['longitude']):.6f}"
-                accuracy = loc.get("accuracy")
-                acc_str = f" (précision ±{accuracy:.0f} m)" if accuracy else ""
-                st.success(f"✓ Position détectée{acc_str}")
-            else:
-                origin = None
-        else:
-            origin = st_searchbox(
-                photon_search,
-                key="origin",
-                placeholder="Départ — ville, adresse, code postal",
-                style_overrides=SEARCHBOX_STYLE,
+        st.caption("Départ")
+        # Show the detected address in a clean input-style box (no icon, no label).
+        geoloc_label = st.session_state.get("geoloc_label")
+        if geoloc_label:
+            st.markdown(
+                f'<div style="background:#0B111C;border:1px solid #2A3344;'
+                f'border-radius:8px;padding:0.7rem 0.9rem;color:#FFFFFF;'
+                f'font-size:0.95rem;margin-bottom:0.5rem;">{geoloc_label}</div>',
+                unsafe_allow_html=True,
             )
+        # Override searchbox: if user picks a different address, it wins.
+        override = st_searchbox(
+            photon_search,
+            key="origin",
+            placeholder=("Changer pour une autre adresse" if geoloc_label
+                         else "Adresse de départ"),
+            style_overrides=SEARCHBOX_STYLE,
+        )
+        origin = override if override else st.session_state.get("geoloc_coords")
 
         st.caption("Arrivée")
         destination = st_searchbox(
@@ -494,7 +542,6 @@ def render_input_view() -> None:
             key="destination",
             placeholder="Arrivée — ville, adresse, code postal",
             style_overrides=SEARCHBOX_STYLE,
-            label="",
         )
 
     st.markdown(

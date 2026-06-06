@@ -866,9 +866,40 @@ def compute_pipeline(inputs: dict) -> dict:
 
     tomtom_key = get_secret("TOMTOM_API_KEY")
 
+    # Collect ALL unique stations across the 4 plans (by rounded coords),
+    # then fetch availability once per unique station in parallel.
+    plans_to_enrich = [
+        (plan_fast_toll, df_toll),
+        (plan_fast_notoll, df_notoll),
+        (plan_eco_toll, df_toll),
+        (plan_eco_notoll, df_notoll),
+    ]
+    seen_keys: set[tuple[float, float]] = set()
+    unique_stops: list[tuple[tuple[float, float], object]] = []
+    for plan, _ in plans_to_enrich:
+        for s in plan.stops:
+            k = (round(s.lat, 5), round(s.lng, 5))
+            if k not in seen_keys:
+                seen_keys.add(k)
+                unique_stops.append((k, s))
+
+    def _avail_one(item):
+        k, s = item
+        return k, fetch_availability(s.lat, s.lng, s.name, tomtom_key or "")
+
+    avail_by_key: dict[tuple[float, float], dict] = {}
+    if unique_stops:
+        with ThreadPoolExecutor(max_workers=min(12, len(unique_stops))) as ex:
+            for k, avail in ex.map(_avail_one, unique_stops):
+                avail_by_key[k] = avail
+
     def enrich_stops(plan, df_src):
-        def process(s):
-            avail = fetch_availability(s.lat, s.lng, s.name, tomtom_key or "")
+        if not plan.stops:
+            return [], 0.0
+        extras = []
+        for s in plan.stops:
+            k = (round(s.lat, 5), round(s.lng, 5))
+            avail = avail_by_key.get(k) or {"label": "⚪ Inconnue", "status": "unknown"}
             tarif_text = None
             if not df_src.empty and "tarification" in df_src.columns:
                 near = df_src[
@@ -878,26 +909,14 @@ def compute_pipeline(inputs: dict) -> dict:
                 if not near.empty:
                     tarif_text = near.iloc[0].get("tarification")
             cost = estimate_stop_cost(s.operator, s.power_kw, s.kwh_added, tarif_text)
-            return {"availability": avail, "cost": cost}
-
-        if not plan.stops:
-            return [], 0.0
-        # 6 stops × 2 API calls = 12 network ops. Run them concurrently.
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            extras = list(ex.map(process, plan.stops))
+            extras.append({"availability": avail, "cost": cost})
         total = sum(e["cost"]["total_eur"] for e in extras)
         return extras, total
 
-    # Run all 4 enrichment passes in parallel.
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        f1 = ex.submit(enrich_stops, plan_fast_toll, df_toll)
-        f2 = ex.submit(enrich_stops, plan_fast_notoll, df_notoll)
-        f3 = ex.submit(enrich_stops, plan_eco_toll, df_toll)
-        f4 = ex.submit(enrich_stops, plan_eco_notoll, df_notoll)
-        extras_fast_toll, rc_fast_toll = f1.result()
-        extras_fast_notoll, rc_fast_notoll = f2.result()
-        extras_eco_toll, rc_eco_toll = f3.result()
-        extras_eco_notoll, rc_eco_notoll = f4.result()
+    extras_fast_toll, rc_fast_toll = enrich_stops(plan_fast_toll, df_toll)
+    extras_fast_notoll, rc_fast_notoll = enrich_stops(plan_fast_notoll, df_notoll)
+    extras_eco_toll, rc_eco_toll = enrich_stops(plan_eco_toll, df_toll)
+    extras_eco_notoll, rc_eco_notoll = enrich_stops(plan_eco_notoll, df_notoll)
 
     return {
         "origin": origin_coords,

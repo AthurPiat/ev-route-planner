@@ -19,9 +19,9 @@ CLIMB_EFFICIENCY = 0.85
 REGEN_EFFICIENCY = 0.70
 
 # Number of weather sample points along the route.
-WEATHER_SAMPLES = 6
+WEATHER_SAMPLES = 4
 # Max points sent to OpenTopoData in one batch (their public limit is 100).
-ELEVATION_MAX_POINTS = 100
+ELEVATION_MAX_POINTS = 60
 
 
 @dataclass

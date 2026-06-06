@@ -14,6 +14,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from streamlit_folium import st_folium
+from streamlit_geolocation import streamlit_geolocation
 from streamlit_searchbox import st_searchbox
 
 from availability import fetch_availability
@@ -460,14 +461,25 @@ def render_input_view() -> None:
     _render_header()
 
     with st.expander("Mon trajet", expanded=True):
-        use_vehicle_location = st.toggle(
-            "Partir de l'emplacement actuel du véhicule",
-            value=True,
-            help=f"📍 {VEHICLE_LOCATION_LABEL}",
+        st.caption("Départ")
+        departure_mode = st.radio(
+            "Choix du mode de départ",
+            ["📍 Ma position", "✍️ Une adresse"],
+            horizontal=True,
+            key="departure_mode",
+            label_visibility="collapsed",
         )
-        if use_vehicle_location:
-            st.caption(f"📍 Départ : {VEHICLE_LOCATION_LABEL}")
-            origin = VEHICLE_LOCATION_COORDS
+
+        if departure_mode == "📍 Ma position":
+            st.caption("Touche le bouton et autorise l'accès à ta position.")
+            loc = streamlit_geolocation()
+            if loc and loc.get("latitude") is not None:
+                origin = f"{float(loc['latitude']):.6f},{float(loc['longitude']):.6f}"
+                accuracy = loc.get("accuracy")
+                acc_str = f" (précision ±{accuracy:.0f} m)" if accuracy else ""
+                st.success(f"✓ Position détectée{acc_str}")
+            else:
+                origin = None
         else:
             origin = st_searchbox(
                 photon_search,
@@ -475,11 +487,14 @@ def render_input_view() -> None:
                 placeholder="Départ — ville, adresse, code postal",
                 style_overrides=SEARCHBOX_STYLE,
             )
+
+        st.caption("Arrivée")
         destination = st_searchbox(
             photon_search,
             key="destination",
             placeholder="Arrivée — ville, adresse, code postal",
             style_overrides=SEARCHBOX_STYLE,
+            label="",
         )
 
     st.markdown(

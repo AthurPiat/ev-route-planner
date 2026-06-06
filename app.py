@@ -532,6 +532,11 @@ def render_trip_body(
     # Map. Downsample the polyline to ~80 segments so folium HTML stays small
     # and the iframe initializes in <500ms (vs ~3-4s on full resolution).
     m = folium.Map(tiles="CartoDB dark_matter")
+    # Hide the Leaflet / OpenStreetMap / CARTO attribution bar inside the map iframe.
+    # (Personal use only — OSM/Carto require attribution for redistribution.)
+    m.get_root().html.add_child(folium.Element(
+        "<style>.leaflet-control-attribution { display: none !important; }</style>"
+    ))
     pts_full = plan.updated_points
     TARGET_SEGMENTS = 80
     step = max(1, len(pts_full) // TARGET_SEGMENTS)
@@ -684,6 +689,11 @@ def render_trip(  # kept for backward compat — wraps render_trip_body
     # Map. Downsample the polyline to ~80 segments so folium HTML stays small
     # and the iframe initializes in <500ms (vs ~3-4s on full resolution).
     m = folium.Map(tiles="CartoDB dark_matter")
+    # Hide the Leaflet / OpenStreetMap / CARTO attribution bar inside the map iframe.
+    # (Personal use only — OSM/Carto require attribution for redistribution.)
+    m.get_root().html.add_child(folium.Element(
+        "<style>.leaflet-control-attribution { display: none !important; }</style>"
+    ))
     pts_full = plan.updated_points
     TARGET_SEGMENTS = 80
     step = max(1, len(pts_full) // TARGET_SEGMENTS)

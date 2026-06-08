@@ -427,8 +427,8 @@ st.markdown(
     /* "⋯" button = green square matching the box height (44px). */
     [class*="st-key-origin_more"] button,
     [class*="st-key-origin_more"] [data-testid^="stBaseButton"] {
-        background: #5FFFA7 !important;
-        background-color: #5FFFA7 !important;
+        background: #4DC988 !important;
+        background-color: #4DC988 !important;
         color: #03060D !important;
         border: 0 !important;
         border-radius: 8px !important;
@@ -452,8 +452,8 @@ st.markdown(
     [class*="st-key-origin_more"] button:hover,
     [class*="st-key-origin_more"] button:focus,
     [class*="st-key-origin_more"] button:active {
-        background: #00E676 !important;
-        background-color: #00E676 !important;
+        background: #5FCB99 !important;
+        background-color: #5FCB99 !important;
         color: #03060D !important;
         border: 0 !important;
         box-shadow: none !important;
@@ -668,7 +668,7 @@ def render_input_view() -> None:
     # for type); col_more holds the borderless ⋯ button. The cartouche being
     # a plain <div> (not a button) means it doesn't have Streamlit's intrinsic
     # min-width, so the column ratio is actually respected.
-    col_main, col_more = st.columns([7, 1], vertical_alignment="top")
+    col_main, col_more = st.columns([7, 1], vertical_alignment="top", gap="medium")
     with col_main:
         if mode == "type":
             typed = st_searchbox(
@@ -699,7 +699,7 @@ def render_input_view() -> None:
             _origin_dialog()
 
     # ARRIVÉE — same column structure as départ so the box width matches.
-    col_arr, col_arr_pad = st.columns([7, 1], vertical_alignment="top")
+    col_arr, col_arr_pad = st.columns([7, 1], vertical_alignment="top", gap="medium")
     with col_arr:
         destination = st_searchbox(
             photon_search,

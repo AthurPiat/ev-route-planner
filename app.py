@@ -277,10 +277,31 @@ st.markdown(
         min-width: 0 !important;
     }
 
-    /* Backup: hide dropdown chevron + separator in any searchbox/select. */
+    /* Backup: hide all react-select indicator chevrons/separators. */
+    [class*="indicatorsContainer"],
+    [class*="-IndicatorsContainer"],
     [class*="-DropdownIndicator"],
     [class*="-IndicatorSeparator"] {
         display: none !important;
+    }
+
+    /* Style the ▾ chevron button in the départ row to look like just an icon
+       (no border, no fill) integrated inside the cartouche on the right. */
+    [data-testid="stExpanderDetails"] [data-testid="stHorizontalBlock"]:first-of-type
+        [data-testid="column"]:last-of-type button {
+        background: transparent !important;
+        border: none !important;
+        color: #9AA3B2 !important;
+        height: 44px !important;
+        min-width: 32px !important;
+        padding: 0 !important;
+        font-size: 1.05rem !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stExpanderDetails"] [data-testid="stHorizontalBlock"]:first-of-type
+        [data-testid="column"]:last-of-type button:hover {
+        color: #FFFFFF !important;
+        background: rgba(255,255,255,0.05) !important;
     }
 
     /* Popover ⋮ button: transparent so it visually sits inside the cartouche
@@ -554,7 +575,8 @@ SEARCHBOX_STYLE = {
         "singleValue": {"color": "#FFFFFF"},
         "placeholder": {"color": "#9AA3B2"},
         "input": {"color": "#FFFFFF"},
-        # Hide the dropdown chevron and its vertical separator.
+        # Hide the entire indicators zone (chevron + separator + clear button).
+        "indicatorsContainer": {"display": "none"},
         "dropdownIndicator": {"display": "none"},
         "indicatorSeparator": {"display": "none"},
     },
@@ -653,7 +675,7 @@ def render_input_view() -> None:
                 origin = VEHICLE_LOCATION_COORDS
 
         with col_menu:
-            if st.button("⋮", key="origin_menu_toggle"):
+            if st.button("▾", key="origin_menu_toggle"):
                 _origin_menu_dialog()
 
         # === ARRIVÉE cartouche (just a searchbox) ===

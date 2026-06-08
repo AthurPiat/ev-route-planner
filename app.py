@@ -277,81 +277,11 @@ st.markdown(
         min-width: 0 !important;
     }
 
-    /* Backup: hide all react-select indicator chevrons/separators. */
-    [class*="indicatorsContainer"],
-    [class*="-IndicatorsContainer"],
-    [class*="-DropdownIndicator"],
+    /* Keep the native searchbox chevron — but hide the vertical separator. */
     [class*="-IndicatorSeparator"] {
         display: none !important;
     }
 
-    /* Style the ▾ chevron button in the départ row to look like just an icon
-       (no border, no fill) integrated inside the cartouche on the right. */
-    [data-testid="stExpanderDetails"] [data-testid="stHorizontalBlock"]:first-of-type
-        [data-testid="column"]:last-of-type button {
-        background: transparent !important;
-        border: none !important;
-        color: #9AA3B2 !important;
-        height: 44px !important;
-        min-width: 32px !important;
-        padding: 0 !important;
-        font-size: 1.05rem !important;
-        box-shadow: none !important;
-    }
-    [data-testid="stExpanderDetails"] [data-testid="stHorizontalBlock"]:first-of-type
-        [data-testid="column"]:last-of-type button:hover {
-        color: #FFFFFF !important;
-        background: rgba(255,255,255,0.05) !important;
-    }
-
-    /* Popover ⋮ button: transparent so it visually sits inside the cartouche
-       next to it (no separate bordered box). */
-    [data-testid="stPopover"] > div > button {
-        background-color: transparent !important;
-        border: none !important;
-        color: #9AA3B2 !important;
-        padding: 0 0.3rem !important;
-        font-size: 1.4rem !important;
-        line-height: 1 !important;
-        height: 44px !important;
-        box-shadow: none !important;
-        min-width: 32px !important;
-    }
-    [data-testid="stPopover"] > div > button:hover {
-        background-color: rgba(255,255,255,0.06) !important;
-        color: #FFFFFF !important;
-    }
-
-    /* Inner cartouche (address text) — transparent so the wrapper row provides
-       the visible border (one merged rectangle around address + ⋮ menu). */
-    .origin-cartouche {
-        background: transparent;
-        border: none;
-        padding: 0.7rem 0.9rem;
-        color: #FFFFFF;
-        font-size: 0.95rem;
-        height: 44px;
-        display: flex;
-        align-items: center;
-    }
-
-    /* The horizontal row that contains the cartouche AND the popover ⋮:
-       gets the actual visible border so the two children look as one box. */
-    [data-testid="stExpanderDetails"] [data-testid="stHorizontalBlock"]:first-of-type {
-        background: #0B111C;
-        border: 1px solid #2A3344;
-        border-radius: 8px;
-        overflow: hidden;
-        margin-bottom: 0.5rem;
-    }
-
-    /* When the cartouche is in "typed" mode (searchbox visible inside the row),
-       drop the searchbox's own border to avoid double borders. */
-    [data-testid="stExpanderDetails"] [data-testid="stHorizontalBlock"]:first-of-type
-        [class*="-control"] {
-        background: transparent !important;
-        border: none !important;
-    }
 
     /* Tighten the top padding so content starts near the top */
     .main .block-container,
@@ -575,9 +505,9 @@ SEARCHBOX_STYLE = {
         "singleValue": {"color": "#FFFFFF"},
         "placeholder": {"color": "#9AA3B2"},
         "input": {"color": "#FFFFFF"},
-        # Hide the entire indicators zone (chevron + separator + clear button).
-        "indicatorsContainer": {"display": "none"},
-        "dropdownIndicator": {"display": "none"},
+        # Keep the dropdown chevron — it's the natural way to open the
+        # options list (Votre position / Votre voiture / Saisir adresse).
+        "dropdownIndicator": {"color": "#9AA3B2"},
         "indicatorSeparator": {"display": "none"},
     },
 }
@@ -605,21 +535,6 @@ def _search_origin(query: str) -> list[tuple[str, str]]:
     return options
 
 
-@st.dialog("Choisir le départ", width="small")
-def _origin_menu_dialog() -> None:
-    """Overlay modal triggered by ⋮ — 3 quick picks. Streamlit auto-closes
-    the dialog after the rerun triggered by any button click."""
-    if st.button("✏️ Saisir une adresse", key="dlg_type", use_container_width=True):
-        st.session_state.origin_mode = "type"
-        st.rerun()
-    if st.button("📍 Votre position", key="dlg_gps", use_container_width=True):
-        st.session_state.origin_mode = "gps"
-        st.rerun()
-    if st.button("🚗 Votre voiture", key="dlg_car", use_container_width=True):
-        st.session_state.origin_mode = "car"
-        st.rerun()
-
-
 def render_input_view() -> None:
     """STEP 1 — Inputs page. Captures user choices, then transitions to loading."""
     _render_header()
@@ -636,49 +551,21 @@ def render_input_view() -> None:
                 st.session_state.geoloc_coords = f"{lat:.6f},{lng:.6f}"
                 st.session_state.geoloc_label = _reverse_geocode(lat, lng)
 
-        # Initial mode: GPS if available, else vehicle.
-        if "origin_mode" not in st.session_state:
-            st.session_state.origin_mode = (
-                "gps" if "geoloc_coords" in st.session_state else "car"
-            )
+        # === DÉPART searchbox — chevron natif ouvre la liste avec
+        # "Votre position / Votre voiture" + autocomplete photon dès qu'on tape.
+        default_origin = (
+            st.session_state.get("geoloc_coords") or VEHICLE_LOCATION_COORDS
+        )
+        origin_choice = st_searchbox(
+            _search_origin,
+            key="origin",
+            placeholder="Départ",
+            default=default_origin,
+            style_overrides=SEARCHBOX_STYLE,
+        )
+        origin = origin_choice or default_origin
 
-        mode = st.session_state.origin_mode
-
-        # === DÉPART cartouche (single row: display + ⋮ menu) ===
-        col_main, col_menu = st.columns([8, 1], gap="small", vertical_alignment="center")
-
-        with col_main:
-            if mode == "type":
-                typed = st_searchbox(
-                    photon_search,
-                    key="origin_typed",
-                    placeholder="Départ",
-                    style_overrides=SEARCHBOX_STYLE,
-                )
-                if typed:
-                    st.session_state.typed_origin_coords = typed
-                origin = st.session_state.get("typed_origin_coords")
-            elif mode == "gps":
-                geo_label = st.session_state.get("geoloc_label", "détection…")
-                st.markdown(
-                    f'<div class="origin-cartouche">'
-                    f'<span style="margin-right:0.5rem;">📍</span>{geo_label}</div>',
-                    unsafe_allow_html=True,
-                )
-                origin = st.session_state.get("geoloc_coords") or VEHICLE_LOCATION_COORDS
-            else:  # car
-                st.markdown(
-                    f'<div class="origin-cartouche">'
-                    f'<span style="margin-right:0.5rem;">🚗</span>{VEHICLE_LOCATION_LABEL}</div>',
-                    unsafe_allow_html=True,
-                )
-                origin = VEHICLE_LOCATION_COORDS
-
-        with col_menu:
-            if st.button("▾", key="origin_menu_toggle"):
-                _origin_menu_dialog()
-
-        # === ARRIVÉE cartouche (just a searchbox) ===
+        # === ARRIVÉE searchbox (autocomplete photon) ===
         destination = st_searchbox(
             photon_search,
             key="destination",

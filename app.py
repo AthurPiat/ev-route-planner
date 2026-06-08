@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import os
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import folium
 import pandas as pd
@@ -423,26 +424,33 @@ st.markdown(
         border-bottom-color: #5FFFA7 !important;
     }
 
-    /* Borderless "⋯" button used next to the départ field. */
-    .st-key-origin_more button {
+    /* Borderless "⋯" button used next to the départ field.
+       Aggressive selectors to win Streamlit's emotion CSS specificity. */
+    [class*="st-key-origin_more"] button,
+    [class*="st-key-origin_more"] [data-testid^="stBaseButton"] {
         background: transparent !important;
-        border: none !important;
+        background-color: transparent !important;
+        border: 0 !important;
+        border-color: transparent !important;
         box-shadow: none !important;
+        outline: none !important;
         color: #9AA3B2 !important;
         font-size: 1.6rem !important;
         line-height: 1 !important;
         padding: 0 !important;
         min-height: 0 !important;
     }
-    .st-key-origin_more button:hover,
-    .st-key-origin_more button:focus {
+    [class*="st-key-origin_more"] button:hover,
+    [class*="st-key-origin_more"] button:focus,
+    [class*="st-key-origin_more"] button:active {
         color: #5FFFA7 !important;
         background: transparent !important;
-        border: none !important;
+        background-color: transparent !important;
+        border: 0 !important;
         box-shadow: none !important;
     }
     /* Cartouche-button (gps / car) — fill the column, left-aligned text. */
-    .st-key-origin_box button {
+    [class*="st-key-origin_box"] button {
         text-align: left !important;
         justify-content: flex-start !important;
     }
@@ -456,9 +464,27 @@ st.markdown(
 # Password gate + header
 # ============================================================================
 
+def _logo_b64() -> str:
+    """Read the Qivia logo and return it as a base64 string (empty on failure)."""
+    import base64
+    try:
+        path = Path(__file__).parent / "assets" / "logo-qivia.png"
+        return base64.b64encode(path.read_bytes()).decode("ascii")
+    except Exception:
+        return ""
+
+
 def _render_header() -> None:
-    st.image("assets/logo-qivia.png", width=80)
+    # Inline base64 image — more robust than st.image on Streamlit Cloud
+    # (no broken-image fallback if the asset path resolution hiccups).
+    b64 = _logo_b64()
+    img_html = (
+        f'<img src="data:image/png;base64,{b64}" '
+        f'style="width:80px;height:auto;display:block;margin:0;" alt="Qivia">'
+        if b64 else ""
+    )
     st.markdown(
+        f'{img_html}'
         '<h1 style="margin:0.6rem 0 0 0;font-size:1.6rem;line-height:1.2;">'
         'Bonjour <span class="qivia-highlight">Arthur</span>, où va-t-on ?'
         '</h1>',
@@ -589,65 +615,66 @@ def render_input_view() -> None:
     """STEP 1 — Inputs page. Captures user choices, then transitions to loading."""
     _render_header()
 
-    with st.expander("Mon trajet", expanded=True):
-        # Silent auto-geolocation. get_geolocation() is asynchronous: first
-        # render returns None while the browser prompt is up; once the user
-        # grants permission, the JS resolves and Streamlit reruns.
-        if "geoloc_coords" not in st.session_state:
-            loc = get_geolocation()
-            if loc and loc.get("coords"):
-                lat = float(loc["coords"]["latitude"])
-                lng = float(loc["coords"]["longitude"])
-                st.session_state.geoloc_coords = f"{lat:.6f},{lng:.6f}"
-                st.session_state.geoloc_label = _reverse_geocode(lat, lng)
+    # Silent auto-geolocation. get_geolocation() is asynchronous: first
+    # render returns None while the browser prompt is up; once the user
+    # grants permission, the JS resolves and Streamlit reruns.
+    if "geoloc_coords" not in st.session_state:
+        loc = get_geolocation()
+        if loc and loc.get("coords"):
+            lat = float(loc["coords"]["latitude"])
+            lng = float(loc["coords"]["longitude"])
+            st.session_state.geoloc_coords = f"{lat:.6f},{lng:.6f}"
+            st.session_state.geoloc_label = _reverse_geocode(lat, lng)
 
-        # Default mode: GPS if available, else vehicle.
-        if "origin_mode" not in st.session_state:
-            st.session_state.origin_mode = (
-                "gps" if "geoloc_coords" in st.session_state else "car"
+    # Default mode: GPS if available, else vehicle.
+    if "origin_mode" not in st.session_state:
+        st.session_state.origin_mode = (
+            "gps" if "geoloc_coords" in st.session_state else "car"
+        )
+
+    mode = st.session_state.origin_mode
+
+    # DÉPART — left column (box) + right column (borderless ⋯).
+    col_main, col_more = st.columns([11, 1], vertical_alignment="center")
+    with col_main:
+        if mode == "type":
+            typed = st_searchbox(
+                photon_search,
+                key="origin_typed",
+                placeholder="Saisir une adresse de départ",
+                style_overrides=SEARCHBOX_STYLE,
             )
-
-        mode = st.session_state.origin_mode
-
-        # Same layout in all 3 modes: main column on the left + a borderless
-        # "⋯" button on the right that reopens the source dialog.
-        col_main, col_more = st.columns([11, 1], vertical_alignment="center")
-        with col_main:
-            if mode == "type":
-                typed = st_searchbox(
-                    photon_search,
-                    key="origin_typed",
-                    placeholder="Saisir une adresse de départ",
-                    style_overrides=SEARCHBOX_STYLE,
-                )
-                if typed:
-                    st.session_state.typed_origin_coords = typed
-                origin = st.session_state.get("typed_origin_coords")
-            else:
-                if mode == "gps":
-                    geo = st.session_state.get("geoloc_label", "Détection en cours…")
-                    display = f"📍 {geo}"
-                    origin = st.session_state.get("geoloc_coords") or VEHICLE_LOCATION_COORDS
-                else:  # car
-                    display = f"🚗 {VEHICLE_LOCATION_LABEL}"
-                    origin = VEHICLE_LOCATION_COORDS
-                # Cartouche-button (no chevron — the ⋯ is outside the box).
-                # Also clickable as a generous tap target on mobile.
-                if st.button(display, key="origin_box",
-                             use_container_width=True):
-                    _origin_dialog()
-        with col_more:
-            if st.button("⋯", key="origin_more",
-                         help="Changer la source du départ"):
+            if typed:
+                st.session_state.typed_origin_coords = typed
+            origin = st.session_state.get("typed_origin_coords")
+        else:
+            if mode == "gps":
+                geo = st.session_state.get("geoloc_label", "Détection en cours…")
+                display = f"📍 {geo}"
+                origin = st.session_state.get("geoloc_coords") or VEHICLE_LOCATION_COORDS
+            else:  # car
+                display = f"🚗 {VEHICLE_LOCATION_LABEL}"
+                origin = VEHICLE_LOCATION_COORDS
+            # Cartouche-button (no chevron, left-aligned text via CSS).
+            if st.button(display, key="origin_box",
+                         use_container_width=True):
                 _origin_dialog()
+    with col_more:
+        if st.button("⋯", key="origin_more",
+                     help="Changer la source du départ"):
+            _origin_dialog()
 
-        # ARRIVÉE = standard photon searchbox.
+    # ARRIVÉE — same [11, 1] split for visual width parity; right column empty.
+    col_arr, col_arr_pad = st.columns([11, 1], vertical_alignment="center")
+    with col_arr:
         destination = st_searchbox(
             photon_search,
             key="destination",
             placeholder="Arrivée",
             style_overrides=SEARCHBOX_STYLE,
         )
+    with col_arr_pad:
+        st.empty()
 
     st.markdown(
         f"""

@@ -483,6 +483,18 @@ st.markdown(
     [data-testid="column"] {
         min-width: 0 !important;
     }
+    /* Force horizontal block (= st.columns wrapper) to space its children
+       generously on the départ / arrivée rows. The `gap` param of st.columns
+       isn't reliable across Streamlit versions, so we override via CSS.
+       Multiple selectors for robustness across Streamlit emotion DOM shapes. */
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-origin_more"]),
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-destination"]),
+    [data-testid="horizontalBlock"]:has([class*="st-key-origin_more"]),
+    [data-testid="horizontalBlock"]:has([class*="st-key-destination"]),
+    div:has(> [data-testid="stColumn"] > div > [class*="st-key-origin_more"]) {
+        gap: 2.5rem !important;
+        column-gap: 2.5rem !important;
+    }
 
     </style>
     """,

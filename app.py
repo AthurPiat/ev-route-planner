@@ -458,6 +458,62 @@ st.markdown(
         border: 0 !important;
         box-shadow: none !important;
     }
+
+    /* "On y va !" — gros bouton centré avec halo néon Qivia. */
+    [class*="st-key-go_button"] button {
+        background: #5FFFA7 !important;
+        background-color: #5FFFA7 !important;
+        color: #03060D !important;
+        font-size: 1.25rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.01em !important;
+        padding: 0.9rem 2rem !important;
+        border: none !important;
+        border-radius: 14px !important;
+        box-shadow:
+            0 0 0 2px rgba(95, 255, 167, 0.25),
+            0 0 16px rgba(95, 255, 167, 0.55),
+            0 0 32px rgba(95, 255, 167, 0.35) !important;
+        transition: all 0.18s ease !important;
+    }
+    [class*="st-key-go_button"] button:hover,
+    [class*="st-key-go_button"] button:focus {
+        background: #5FFFA7 !important;
+        color: #03060D !important;
+        transform: translateY(-1px);
+        box-shadow:
+            0 0 0 2px rgba(95, 255, 167, 0.4),
+            0 0 24px rgba(95, 255, 167, 0.85),
+            0 0 48px rgba(95, 255, 167, 0.55) !important;
+    }
+    [class*="st-key-go_button"] button:active {
+        transform: translateY(0);
+    }
+
+    /* Petit bouton "?" discret (popover) à côté des cartes d'info. */
+    [data-testid="stPopover"] button {
+        background: transparent !important;
+        color: #9AA3B2 !important;
+        border: 1px solid #2A3344 !important;
+        border-radius: 50% !important;
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+        max-width: 28px !important;
+        padding: 0 !important;
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        line-height: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    [data-testid="stPopover"] button:hover {
+        color: #5FFFA7 !important;
+        border-color: #5FFFA7 !important;
+        background: transparent !important;
+    }
     /* Cartouche départ (gps / car) — pure styled <div>, NOT a Streamlit button.
        This dodges the min-width pitfall that was forcing the column wide. */
     .dep-cartouche {
@@ -722,52 +778,74 @@ def render_input_view() -> None:
     with col_arr_pad:
         st.empty()
 
-    st.markdown(
-        f"""
-        <div style="background:#0B111C;border:1px solid #1A2030;border-radius:10px;
-                    padding:1rem 1.1rem;margin:0.8rem 0;color:#FFFFFF;line-height:1.65;
-                    font-size:0.95rem;">
-          Votre véhicule est une <b style="color:#5FFFA7;">{VEHICLE_NAME}</b>.<br>
-          Vous bénéficiez de l'option <b style="color:#5FFFA7;">véhicule connecté</b>.<br>
-          Il est actuellement chargé à <b style="color:#5FFFA7;">{VEHICLE_CURRENT_SOC} %</b>.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    custom_soc = st.toggle("Simuler avec une autre charge ?", value=False)
-    soc = st.slider("Charge pour la simulation (%)", 0, 100, VEHICLE_CURRENT_SOC) if custom_soc else VEHICLE_CURRENT_SOC
+    # Current values come from session_state if the user already edited them
+    # via the popovers, otherwise from the defaults.
+    soc = st.session_state.get("soc_slider", VEHICLE_CURRENT_SOC)
+    driving_style = st.session_state.get("style_radio", VEHICLE_DEFAULT_STYLE)
 
-    st.markdown(
-        f"""
-        <div style="background:#0B111C;border:1px solid #1A2030;border-radius:10px;
-                    padding:1rem 1.1rem;margin:0.8rem 0;color:#FFFFFF;line-height:1.65;
-                    font-size:0.95rem;">
-          Votre type de conduite est <b style="color:#5FFFA7;">{VEHICLE_DEFAULT_STYLE}</b>.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    custom_style = st.toggle("Paramétrer un autre style pour ce trajet ?", value=False)
-    if custom_style:
-        style_options = list(DRIVING_STYLES.keys())
-        default_idx = style_options.index(VEHICLE_DEFAULT_STYLE) if VEHICLE_DEFAULT_STYLE in style_options else 1
-        driving_style = st.radio(
-            "Conduite", style_options, index=default_idx, horizontal=True,
+    # CHARGE — info card + small "?" popover that explains + lets you edit.
+    soc_col_text, soc_col_help = st.columns([10, 1], vertical_alignment="center")
+    with soc_col_text:
+        st.markdown(
+            f"""
+            <div style="background:#0B111C;border:1px solid #1A2030;border-radius:10px;
+                        padding:1rem 1.1rem;margin:0.8rem 0;color:#FFFFFF;line-height:1.65;
+                        font-size:0.95rem;">
+              Votre véhicule est une <b style="color:#5FFFA7;">{VEHICLE_NAME}</b>,
+              actuellement chargé à <b style="color:#5FFFA7;">{soc} %</b>.
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-    else:
-        driving_style = VEHICLE_DEFAULT_STYLE
+    with soc_col_help:
+        with st.popover("?", use_container_width=False):
+            st.caption(
+                "Cette info provient de votre voiture via l'option "
+                "**véhicule connecté**. Vous pouvez la modifier pour ce trajet :"
+            )
+            st.slider("Charge (%)", 0, 100, VEHICLE_CURRENT_SOC, key="soc_slider")
 
-    st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
-    if st.button("Calculer mon trajet", type="primary"):
-        st.session_state.inputs = {
-            "origin": origin,
-            "destination": destination,
-            "soc": soc,
-            "driving_style": driving_style,
-        }
-        st.session_state.pop("result_data", None)
-        st.session_state.step = "loading"
-        st.rerun()
+    # STYLE — same pattern.
+    style_col_text, style_col_help = st.columns([10, 1], vertical_alignment="center")
+    with style_col_text:
+        st.markdown(
+            f"""
+            <div style="background:#0B111C;border:1px solid #1A2030;border-radius:10px;
+                        padding:1rem 1.1rem;margin:0.8rem 0;color:#FFFFFF;line-height:1.65;
+                        font-size:0.95rem;">
+              Votre type de conduite est <b style="color:#5FFFA7;">{driving_style}</b>.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with style_col_help:
+        with st.popover("?", use_container_width=False):
+            st.caption(
+                "Récupéré via l'option **véhicule connecté**. "
+                "Vous pouvez choisir un autre style pour ce trajet :"
+            )
+            style_options = list(DRIVING_STYLES.keys())
+            default_idx = style_options.index(VEHICLE_DEFAULT_STYLE) if VEHICLE_DEFAULT_STYLE in style_options else 1
+            st.radio(
+                "Conduite", style_options, index=default_idx,
+                horizontal=True, key="style_radio",
+            )
+
+    # "On y va !" — centered button with neon glow.
+    st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+    _, btn_col, _ = st.columns([1, 2, 1])
+    with btn_col:
+        if st.button("On y va !", key="go_button", type="primary",
+                     use_container_width=True):
+            st.session_state.inputs = {
+                "origin": origin,
+                "destination": destination,
+                "soc": soc,
+                "driving_style": driving_style,
+            }
+            st.session_state.pop("result_data", None)
+            st.session_state.step = "loading"
+            st.rerun()
 
 
 # ============================================================================

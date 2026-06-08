@@ -971,7 +971,8 @@ def render_trip_body(
         )
         folium.Marker(
             location=[s.lat, s.lng],
-            tooltip=f"#{i+1} — {s.name}",
+            # No tooltip — popup-only on click. The Leaflet default tooltip
+            # would otherwise show a white box alongside the green popup.
             popup=folium.Popup(popup_html, max_width=260),
             icon=folium.DivIcon(
                 html=(
@@ -1449,29 +1450,31 @@ def render_result_view() -> None:
         if executor:
             executor.shutdown(wait=False)
 
-    # Title only (back button moved to the bottom under the map, where it's
-    # not hidden behind Safari's URL bar on iOS).
+    # Small Qivia logo at the top, then title. Back button is at the bottom.
+    b64 = _logo_b64()
+    logo_html = (
+        f'<img src="data:image/png;base64,{b64}" '
+        f'style="width:56px;height:auto;display:block;margin:0 0 0.6rem 0;" alt="Qivia">'
+        if b64 else ""
+    )
     st.markdown(
+        f'{logo_html}'
         '<h2 style="margin:0.4rem 0 0 0;font-size:1.4rem;color:#FFFFFF;line-height:1.2;">'
         'Voilà votre trajet <span class="qivia-highlight">Arthur</span>'
         '</h2>',
         unsafe_allow_html=True,
     )
 
-    # Two toggles in one row — pick the strategy + the toll option.
+    # Two toggles on one line. Off = default (Rapide / Avec péage).
     t1, t2 = st.columns(2)
     with t1:
-        mode_choice = st.radio(
-            "Stratégie", ["Rapide", "Économique"],
-            horizontal=True, key="mode_toggle", label_visibility="collapsed",
-        )
+        eco_on = st.toggle("Économique", value=False, key="mode_eco_toggle",
+                           help="Off : Rapide  •  On : Économique")
     with t2:
-        toll_choice = st.radio(
-            "Péage", ["Avec péage", "Sans péage"],
-            horizontal=True, key="toll_toggle", label_visibility="collapsed",
-        )
-    mode_key = "fast" if mode_choice == "Rapide" else "eco"
-    toll_key = "toll" if toll_choice == "Avec péage" else "notoll"
+        notoll_on = st.toggle("Sans péage", value=False, key="toll_notoll_toggle",
+                              help="Off : Avec péage  •  On : Sans péage")
+    mode_key = "eco" if eco_on else "fast"
+    toll_key = "notoll" if notoll_on else "toll"
 
     # Ensure the selected combo has been computed (waits on background threads
     # if needed). Initial fast/toll is always present from compute_pipeline.
@@ -1483,8 +1486,8 @@ def render_result_view() -> None:
         # For eco/notoll: _ensure_notoll already brings in both plans.
     except Exception as e:
         st.warning(f"Calcul indisponible : {e}")
-        st.session_state.mode_toggle = "Rapide"
-        st.session_state.toll_toggle = "Avec péage"
+        st.session_state.mode_eco_toggle = False
+        st.session_state.toll_notoll_toggle = False
         st.rerun()
 
     variant = data["variants"][toll_key]

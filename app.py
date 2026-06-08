@@ -424,36 +424,37 @@ st.markdown(
         border-bottom-color: #5FFFA7 !important;
     }
 
-    /* Borderless "⋯" button used next to the départ field.
-       Aggressive selectors to win Streamlit's emotion CSS specificity. */
+    /* "⋯" button = green square matching the box height (44px). */
     [class*="st-key-origin_more"] button,
     [class*="st-key-origin_more"] [data-testid^="stBaseButton"] {
-        background: transparent !important;
-        background-color: transparent !important;
+        background: #5FFFA7 !important;
+        background-color: #5FFFA7 !important;
+        color: #03060D !important;
         border: 0 !important;
-        border-color: transparent !important;
+        border-radius: 8px !important;
         box-shadow: none !important;
         outline: none !important;
-        color: #9AA3B2 !important;
-        font-size: 1.6rem !important;
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        max-width: 44px !important;
+        max-height: 44px !important;
+        padding: 0 !important;
+        font-size: 1.3rem !important;
+        font-weight: 700 !important;
         line-height: 1 !important;
-        padding: 0.85rem 0 !important;  /* vertically aligns ⋯ with input text */
-        min-height: 0 !important;
-        margin-left: auto !important;  /* push to the right of its column */
-        display: block !important;
-    }
-    /* Push the whole st.button wrapper to the right edge of its column. */
-    [class*="st-key-origin_more"] [data-testid="stButton"] {
-        text-align: right !important;
         display: flex !important;
-        justify-content: flex-end !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin-left: auto !important;  /* sit at right edge of its column */
     }
     [class*="st-key-origin_more"] button:hover,
     [class*="st-key-origin_more"] button:focus,
     [class*="st-key-origin_more"] button:active {
-        color: #5FFFA7 !important;
-        background: transparent !important;
-        background-color: transparent !important;
+        background: #00E676 !important;
+        background-color: #00E676 !important;
+        color: #03060D !important;
         border: 0 !important;
         box-shadow: none !important;
     }
@@ -667,7 +668,7 @@ def render_input_view() -> None:
     # for type); col_more holds the borderless ⋯ button. The cartouche being
     # a plain <div> (not a button) means it doesn't have Streamlit's intrinsic
     # min-width, so the column ratio is actually respected.
-    col_main, col_more = st.columns([5, 1.5], vertical_alignment="top")
+    col_main, col_more = st.columns([7, 1], vertical_alignment="top")
     with col_main:
         if mode == "type":
             typed = st_searchbox(
@@ -698,7 +699,7 @@ def render_input_view() -> None:
             _origin_dialog()
 
     # ARRIVÉE — same column structure as départ so the box width matches.
-    col_arr, col_arr_pad = st.columns([5, 1.5], vertical_alignment="top")
+    col_arr, col_arr_pad = st.columns([7, 1], vertical_alignment="top")
     with col_arr:
         destination = st_searchbox(
             photon_search,

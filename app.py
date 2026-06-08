@@ -564,6 +564,24 @@ st.markdown(
         column-gap: 0.85rem !important;
     }
 
+    /* RESULT VIEW — tight vertical rhythm: less air between title, toggles,
+       metrics. We compress the wrappers around the toggles row. */
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-mode_eco_toggle"]) {
+        margin-top: 0.3rem !important;
+        margin-bottom: 0.3rem !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    [class*="st-key-mode_eco_toggle"],
+    [class*="st-key-toll_notoll_toggle"] {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    [class*="st-key-mode_eco_toggle"] [data-testid="stElementContainer"],
+    [class*="st-key-toll_notoll_toggle"] [data-testid="stElementContainer"] {
+        margin: 0 !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -1465,25 +1483,6 @@ def render_result_view() -> None:
         unsafe_allow_html=True,
     )
 
-    # Tighten vertical rhythm: less air between title → toggles → metrics row.
-    st.markdown(
-        """
-        <style>
-        /* Trim the vertical block padding that Streamlit injects around the
-           toggles row on the result page. */
-        [class*="st-key-mode_eco_toggle"],
-        [class*="st-key-toll_notoll_toggle"] {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-        }
-        [data-testid="stHorizontalBlock"]:has([class*="st-key-mode_eco_toggle"]) {
-            margin-top: 0.25rem !important;
-            margin-bottom: 0.25rem !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
     # Two toggles on one line. Off = default (Rapide / Avec péage).
     t1, t2 = st.columns(2)

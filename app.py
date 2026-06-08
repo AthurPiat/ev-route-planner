@@ -1454,14 +1454,34 @@ def render_result_view() -> None:
     b64 = _logo_b64()
     logo_html = (
         f'<img src="data:image/png;base64,{b64}" '
-        f'style="width:56px;height:auto;display:block;margin:0 0 0.6rem 0;" alt="Qivia">'
+        f'style="width:56px;height:auto;display:block;margin:0 0 0.4rem 0;" alt="Qivia">'
         if b64 else ""
     )
     st.markdown(
         f'{logo_html}'
-        '<h2 style="margin:0.4rem 0 0 0;font-size:1.4rem;color:#FFFFFF;line-height:1.2;">'
+        '<h2 style="margin:0.2rem 0 0 0;font-size:1.4rem;color:#FFFFFF;line-height:1.2;">'
         'Voilà votre trajet <span class="qivia-highlight">Arthur</span>'
         '</h2>',
+        unsafe_allow_html=True,
+    )
+
+    # Tighten vertical rhythm: less air between title → toggles → metrics row.
+    st.markdown(
+        """
+        <style>
+        /* Trim the vertical block padding that Streamlit injects around the
+           toggles row on the result page. */
+        [class*="st-key-mode_eco_toggle"],
+        [class*="st-key-toll_notoll_toggle"] {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-mode_eco_toggle"]) {
+            margin-top: 0.25rem !important;
+            margin-bottom: 0.25rem !important;
+        }
+        </style>
+        """,
         unsafe_allow_html=True,
     )
 
@@ -1507,7 +1527,7 @@ def render_result_view() -> None:
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 0.4rem;
-            margin: 0.7rem 0 0.6rem 0;
+            margin: 0.25rem 0 0.5rem 0;
         }
         .result-metric {
             background: #0B111C;

@@ -586,20 +586,24 @@ def render_input_view() -> None:
         mode = st.session_state.origin_mode
 
         if mode == "type":
-            # Type mode: show the searchbox on the main screen.
-            typed = st_searchbox(
-                photon_search,
-                key="origin_typed",
-                placeholder="Saisir une adresse de départ",
-                style_overrides=SEARCHBOX_STYLE,
-            )
-            if typed:
-                st.session_state.typed_origin_coords = typed
-            origin = st.session_state.get("typed_origin_coords")
-            # Small link to reopen the dialog (switch back to GPS / voiture).
-            if st.button("Changer la source", key="origin_change_back",
-                         use_container_width=False):
-                _origin_dialog()
+            # Type mode: searchbox on the left + chevron on the right to
+            # reopen the source dialog (same visual logic as the cartouche).
+            col_input, col_chev = st.columns([10, 1], vertical_alignment="bottom")
+            with col_input:
+                typed = st_searchbox(
+                    photon_search,
+                    key="origin_typed",
+                    placeholder="Saisir une adresse de départ",
+                    style_overrides=SEARCHBOX_STYLE,
+                )
+                if typed:
+                    st.session_state.typed_origin_coords = typed
+                origin = st.session_state.get("typed_origin_coords")
+            with col_chev:
+                if st.button("▾", key="origin_chevron",
+                             use_container_width=True,
+                             help="Changer la source du départ"):
+                    _origin_dialog()
         else:
             # gps / car: cartouche-button showing the address + chevron.
             if mode == "gps":

@@ -449,32 +449,30 @@ st.markdown(
         border: 0 !important;
         box-shadow: none !important;
     }
-    /* Cartouche-button (gps / car) — fill the column, left-aligned text.
-       Streamlit nests button > div > div > p, so we force alignment at every level. */
-    [class*="st-key-origin_box"] button,
-    [class*="st-key-origin_box"] button > div,
-    [class*="st-key-origin_box"] button > div > div,
-    [class*="st-key-origin_box"] button p {
-        text-align: left !important;
-        justify-content: flex-start !important;
-        width: 100% !important;
+    /* Cartouche départ (gps / car) — pure styled <div>, NOT a Streamlit button.
+       This dodges the min-width pitfall that was forcing the column wide. */
+    .dep-cartouche {
+        background: #0B111C;
+        border: 1px solid #2A3344;
+        border-radius: 8px;
+        padding: 0.7rem 0.9rem;
+        min-height: 44px;
+        color: #FFFFFF;
+        font-size: 0.95rem;
+        line-height: 1.4;
+        display: flex;
+        align-items: center;
+        width: 100%;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
-
-    /* Force the départ / arrivée columns to respect a 75/25 ratio — the
-       widgets inside (searchbox, button) were ignoring Streamlit's column
-       sizing and expanding past their column. We target the parent column
-       that contains a specific widget via :has(). */
-    [data-testid="stColumn"]:has([class*="st-key-origin_box"]),
-    [data-testid="stColumn"]:has([class*="st-key-origin_typed"]),
-    [data-testid="stColumn"]:has([class*="st-key-destination"]) {
-        flex: 0 0 75% !important;
-        max-width: 75% !important;
-        width: 75% !important;
-    }
-    [data-testid="stColumn"]:has([class*="st-key-origin_more"]) {
-        flex: 0 0 22% !important;
-        max-width: 22% !important;
-        width: 22% !important;
+    /* Make columns actually respect the flex ratio — see notes above re:
+       min-width: auto being the flex-child default. */
+    [data-testid="stColumn"],
+    [data-testid="column"] {
+        min-width: 0 !important;
     }
 
     </style>
@@ -657,10 +655,11 @@ def render_input_view() -> None:
 
     mode = st.session_state.origin_mode
 
-    # DÉPART — left column (box) + right column (borderless ⋯).
-    # vertical_alignment="top" so the ⋯ stays anchored to the input row even
-    # when the searchbox dropdown expands the left column's height.
-    col_main, col_more = st.columns([1, 5], vertical_alignment="top")
+    # DÉPART — col_main holds the box (markdown div for gps/car, searchbox
+    # for type); col_more holds the borderless ⋯ button. The cartouche being
+    # a plain <div> (not a button) means it doesn't have Streamlit's intrinsic
+    # min-width, so the column ratio is actually respected.
+    col_main, col_more = st.columns([5, 1.5], vertical_alignment="top")
     with col_main:
         if mode == "type":
             typed = st_searchbox(
@@ -680,26 +679,23 @@ def render_input_view() -> None:
             else:  # car
                 display = f"🚗 {VEHICLE_LOCATION_LABEL}"
                 origin = VEHICLE_LOCATION_COORDS
-            # Cartouche-button (no chevron, left-aligned text via CSS).
-            if st.button(display, key="origin_box",
-                         use_container_width=True):
-                _origin_dialog()
+            # Pure HTML cartouche — width controlled by CSS, no min-width pitfall.
+            st.markdown(
+                f'<div class="dep-cartouche">{display}</div>',
+                unsafe_allow_html=True,
+            )
     with col_more:
         if st.button("⋯", key="origin_more",
                      help="Changer la source du départ"):
             _origin_dialog()
 
-    # ARRIVÉE — same split for visual width parity with départ; right col empty.
-    col_arr, col_arr_pad = st.columns([5, 1.5], vertical_alignment="top")
-    with col_arr:
-        destination = st_searchbox(
-            photon_search,
-            key="destination",
-            placeholder="Arrivée",
-            style_overrides=SEARCHBOX_STYLE,
-        )
-    with col_arr_pad:
-        st.empty()
+    # ARRIVÉE — searchbox alone (no ⋯ on this row).
+    destination = st_searchbox(
+        photon_search,
+        key="destination",
+        placeholder="Arrivée",
+        style_overrides=SEARCHBOX_STYLE,
+    )
 
     st.markdown(
         f"""

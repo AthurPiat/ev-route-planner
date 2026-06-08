@@ -1535,7 +1535,7 @@ def render_result_view() -> None:
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 0.4rem;
-            margin: 0.25rem 0 0.5rem 0;
+            margin: -1rem 0 0.5rem 0;
         }
         .result-metric {
             background: #0B111C;

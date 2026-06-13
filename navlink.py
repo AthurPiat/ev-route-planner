@@ -81,35 +81,59 @@ def gmaps_nav_url(
     stops: list[ChargingStop] | None = None,
     stop_place_ids: list[str | None] | None = None,
     destination_place_id: str | None = None,
+    stop_labels: list[str | None] | None = None,
+    destination_label: str | None = None,
 ) -> str:
     """Deeplink universel Google Maps Directions (api=1).
     Ouvre l'app Google Maps en navigation sur iOS/Android.
 
-    Si `stop_place_ids` est fourni ET complet (un id non vide par étape, dans
-    l'ordre), on ajoute `waypoint_place_ids` pour que Google affiche le *nom*
-    des bornes au lieu de « Repère placé ». Idem pour `destination_place_id`.
-    Les coordonnées restent toujours présentes : précision garantie.
+    Pour afficher un *nom* d'étape (au lieu de « Repère placé »), deux voies,
+    par ordre de priorité :
+      1. `place_id` Google (`stop_place_ids` / `destination_place_id`) → nom
+         ET coordonnées exactes. Nécessite la Places API (Google Cloud).
+      2. `stop_labels` / `destination_label` → on passe le texte (nom/adresse)
+         comme point ; Google le re-géocode. Gratuit, mais position recalée par
+         Google. Repli par étape : si un libellé manque, on garde les
+         coordonnées exactes de cette borne.
+    Sans aucune de ces options → coordonnées brutes (« Repère placé »).
     """
-    params = {
+    o = f"{origin[0]:.6f},{origin[1]:.6f}"
+    d = f"{destination[0]:.6f},{destination[1]:.6f}"
+    params: dict[str, str] = {
         "api": "1",
-        "origin": f"{origin[0]:.6f},{origin[1]:.6f}",
-        "destination": f"{destination[0]:.6f},{destination[1]:.6f}",
+        "origin": o,
         "travelmode": "driving",
         "dir_action": "navigate",
     }
+
+    # --- Destination : place_id > libellé texte > coordonnées --------------
+    if destination_place_id:
+        params["destination"] = d  # coords exactes + nom via place_id
+        params["destination_place_id"] = destination_place_id
+    elif destination_label:
+        params["destination"] = destination_label  # texte re-géocodé par Google
+    else:
+        params["destination"] = d
+
+    # --- Étapes ------------------------------------------------------------
     if stops:
-        # Google Maps api=1 accepte plusieurs waypoints séparés par '|'.
-        params["waypoints"] = "|".join(f"{s.lat:.6f},{s.lng:.6f}" for s in stops)
-        # On n'aligne les place_ids QUE s'ils couvrent toutes les étapes :
-        # Google exige une correspondance 1:1 et dans le même ordre.
+        # place_ids : on ne les utilise que s'ils couvrent TOUTES les étapes
+        # (Google exige une correspondance 1:1, dans l'ordre).
         if (
             stop_place_ids
             and len(stop_place_ids) == len(stops)
             and all(stop_place_ids)
         ):
+            params["waypoints"] = "|".join(f"{s.lat:.6f},{s.lng:.6f}" for s in stops)
             params["waypoint_place_ids"] = "|".join(stop_place_ids)
-    if destination_place_id:
-        params["destination_place_id"] = destination_place_id
+        else:
+            # Par étape : libellé texte si dispo, sinon coordonnées exactes.
+            segs: list[str] = []
+            for i, s in enumerate(stops):
+                lbl = stop_labels[i] if (stop_labels and i < len(stop_labels)) else None
+                segs.append(lbl if lbl else f"{s.lat:.6f},{s.lng:.6f}")
+            params["waypoints"] = "|".join(segs)
+
     return "https://www.google.com/maps/dir/?" + urlencode(params)
 
 

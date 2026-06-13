@@ -192,6 +192,15 @@ def _gmaps_place_id(lat: float, lng: float, query: str) -> str | None:
     return find_place_id(lat, lng, query, get_secret("GOOGLE_MAPS_API_KEY"))
 
 
+def _stop_label(stop) -> str | None:
+    """Libellé « nom + ville » d'une borne pour Google Maps (None si vide)."""
+    name = (getattr(stop, "name", "") or "").strip()
+    city = (getattr(stop, "city", "") or "").strip()
+    if name and city and city.lower() not in name.lower():
+        return f"{name}, {city}"
+    return name or (getattr(stop, "operator", "") or "").strip() or city or None
+
+
 def soc_color(soc: float) -> str:
     if soc > 50:
         return "#22c55e"
@@ -1599,26 +1608,25 @@ def render_result_view() -> None:
     # Big primary CTA after the map: launch Google Maps navigation with the
     # charging stops injected as waypoints (direct route if there's no stop).
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-    # Optionnel : résoudre des place_ids Google pour afficher le NOM des étapes
-    # (au lieu de « Repère placé »). Sans clé ou sans match fiable, on garde les
-    # coordonnées exactes — la navigation n'est jamais dégradée.
+    # Afficher le NOM des étapes dans Google Maps (au lieu de « Repère placé »).
+    # Voie gratuite (par défaut) : on passe le nom de la borne / l'adresse de
+    # destination en texte, que Google re-géocode. Si une clé Places est
+    # configurée, on privilégie des place_ids (nom + position exacte).
+    stop_labels = [_stop_label(s) for s in plan.stops]
+    dest_lat, dest_lng = data["destination"]
+    dest_label = _reverse_geocode(dest_lat, dest_lng)
     stop_pids = None
     dest_pid = None
     if get_secret("GOOGLE_MAPS_API_KEY"):
         stop_pids = [
-            _gmaps_place_id(
-                s.lat, s.lng,
-                " ".join(p for p in (s.name, s.city) if p) or s.operator,
-            )
-            for s in plan.stops
+            _gmaps_place_id(s.lat, s.lng, lbl or s.operator)
+            for s, lbl in zip(plan.stops, stop_labels)
         ]
-        dest_lat, dest_lng = data["destination"]
-        dest_pid = _gmaps_place_id(
-            dest_lat, dest_lng, _reverse_geocode(dest_lat, dest_lng)
-        )
+        dest_pid = _gmaps_place_id(dest_lat, dest_lng, dest_label)
     nav_url = gmaps_nav_url(
         data["origin"], data["destination"], plan.stops,
         stop_place_ids=stop_pids, destination_place_id=dest_pid,
+        stop_labels=stop_labels, destination_label=dest_label,
     )
     st.link_button("On y va", nav_url, type="primary", use_container_width=True)
     # Keep a discreet way back to plan another trip.

@@ -211,6 +211,27 @@ def _stop_label(stop) -> str | None:
     return name or (getattr(stop, "operator", "") or "").strip() or city or None
 
 
+def _endpoint_popup_html(kind: str, place: str, soc_pct: float) -> str:
+    """Popup au clic pour les repères Départ / Arrivée : lieu + niveau de charge.
+    `kind` = « Départ » ou « Arrivée ». Style sombre aligné sur les popups de
+    bornes (accent menthe #5FFFA7, texte secondaire #9AA3B2)."""
+    place_safe = (place or "Position").strip() or "Position"
+    soc_col = soc_color(soc_pct)
+    return (
+        f'<div style="min-width:200px;max-width:240px;color:#FFFFFF;'
+        f'font-family:Plus Jakarta Sans,-apple-system,sans-serif;">'
+        f'  <div style="font-weight:700;color:#5FFFA7;font-size:0.95rem;'
+        f'              margin-bottom:0.3rem;line-height:1.2;">{kind}</div>'
+        f'  <div style="color:#9AA3B2;font-size:0.8rem;line-height:1.4;">{place_safe}</div>'
+        f'  <div style="display:flex;justify-content:space-between;align-items:center;'
+        f'              margin-top:0.5rem;font-size:0.85rem;">'
+        f'    <span style="color:#9AA3B2;">Charge</span>'
+        f'    <span style="color:{soc_col};font-weight:700;">{soc_pct:.0f}%</span>'
+        f'  </div>'
+        f'</div>'
+    )
+
+
 def soc_color(soc: float) -> str:
     if soc > 50:
         return "#22c55e"
@@ -1003,8 +1024,27 @@ def render_trip_body(
     if pts:
         all_lats.append(pts[-1].lat)
         all_lngs.append(pts[-1].lng)
-    folium.Marker(origin, tooltip="Départ", icon=folium.Icon(color="green")).add_to(m)
-    folium.Marker(destination, tooltip="Arrivée", icon=folium.Icon(color="blue")).add_to(m)
+    # Départ / Arrivée : popup au clic avec le lieu (reverse-géocodé) et le
+    # niveau de charge (SoC) à ce point. Départ = SoC initial du 1er point ;
+    # Arrivée = SoC d'arrivée calculé par le planner.
+    dep_soc = pts_full[0].soc_pct if pts_full else 0.0
+    arr_soc = plan.arrival_soc_pct
+    folium.Marker(
+        origin,
+        popup=folium.Popup(
+            _endpoint_popup_html("Départ", _reverse_geocode(origin[0], origin[1]), dep_soc),
+            max_width=260,
+        ),
+        icon=folium.Icon(color="green"),
+    ).add_to(m)
+    folium.Marker(
+        destination,
+        popup=folium.Popup(
+            _endpoint_popup_html("Arrivée", _reverse_geocode(destination[0], destination[1]), arr_soc),
+            max_width=260,
+        ),
+        icon=folium.Icon(color="blue"),
+    ).add_to(m)
 
     extras = meta.get("stops_extras", []) if meta else []
     for i, s in enumerate(plan.stops):

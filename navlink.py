@@ -81,6 +81,7 @@ def gmaps_nav_url(
     stops: list[ChargingStop] | None = None,
     stop_place_ids: list[str | None] | None = None,
     destination_place_id: str | None = None,
+    stop_labels: list[str | None] | None = None,
     destination_label: str | None = None,
     origin_place_id: str | None = None,
     origin_label: str | None = None,
@@ -88,18 +89,11 @@ def gmaps_nav_url(
     """Deeplink universel Google Maps Directions (api=1).
     Ouvre l'app Google Maps en navigation sur iOS/Android.
 
-    Règle d'or : **la POSITION de navigation vient toujours des coordonnées**
-    (origine, étapes, destination). Un texte libre ne sert qu'à AFFICHER un nom,
-    jamais à positionner — sinon Google re-géocode et peut échouer (un nom de
-    borne type « IZIVIA Aire de Poitiers » ne correspond à aucun lieu connu →
-    l'itinéraire ne se lance pas).
-
-    Pour afficher un *nom* (au lieu de « Repère placé ») :
-      1. `*_place_id` Google → nom ET coordonnées exactes (Places API requise).
-      2. `origin_label` / `destination_label` → texte re-géocodé par Google.
-         Réservé aux ADRESSES (qui se géocodent bien), pas aux noms de bornes.
-    Les ÉTAPES (bornes) utilisent toujours les coordonnées exactes ; on n'y
-    attache un nom que via `stop_place_ids` (jamais de texte libre).
+    Chaque point (origine, étape, destination) affiche un NOM dans Google
+    Maps au lieu de « Repère placé », par ordre de priorité :
+      1. `*_place_id` → nom ET coordonnées exactes (Places API requise).
+      2. `*_label` → texte re-géocodé par Google (adresse ou nom de borne).
+      3. coordonnées brutes → « Repère placé » (dernier recours).
     """
     o = f"{origin[0]:.6f},{origin[1]:.6f}"
     d = f"{destination[0]:.6f},{destination[1]:.6f}"
@@ -109,35 +103,47 @@ def gmaps_nav_url(
         "dir_action": "navigate",
     }
 
-    # --- Origine : place_id > libellé adresse > coordonnées ----------------
+    # --- Origine : place_id > libellé > coordonnées -----------------------
     if origin_place_id:
-        params["origin"] = o  # coords exactes + nom via place_id
+        params["origin"] = o
         params["origin_place_id"] = origin_place_id
     elif origin_label:
-        params["origin"] = origin_label  # adresse re-géocodée par Google
+        params["origin"] = origin_label
     else:
         params["origin"] = o
 
-    # --- Destination : place_id > libellé adresse > coordonnées ------------
+    # --- Destination : place_id > libellé > coordonnées --------------------
     if destination_place_id:
-        params["destination"] = d  # coords exactes + nom via place_id
+        params["destination"] = d
         params["destination_place_id"] = destination_place_id
     elif destination_label:
-        params["destination"] = destination_label  # adresse re-géocodée par Google
+        params["destination"] = destination_label
     else:
         params["destination"] = d
 
-    # --- Étapes : TOUJOURS les coordonnées (nom optionnel via place_id) ----
+    # --- Étapes : place_id > libellé > coordonnées -------------------------
     if stops:
-        params["waypoints"] = "|".join(f"{s.lat:.6f},{s.lng:.6f}" for s in stops)
-        # place_ids : on ne les attache que s'ils couvrent TOUTES les étapes
-        # (Google exige une correspondance 1:1, dans l'ordre).
         if (
             stop_place_ids
             and len(stop_place_ids) == len(stops)
             and all(stop_place_ids)
         ):
+            # place_ids couvrent TOUTES les étapes → coords + place_ids.
+            params["waypoints"] = "|".join(
+                f"{s.lat:.6f},{s.lng:.6f}" for s in stops
+            )
             params["waypoint_place_ids"] = "|".join(stop_place_ids)
+        else:
+            # Par étape : libellé texte si dispo, sinon coords.
+            segs: list[str] = []
+            for i, s in enumerate(stops):
+                lbl = (
+                    stop_labels[i]
+                    if (stop_labels and i < len(stop_labels))
+                    else None
+                )
+                segs.append(lbl if lbl else f"{s.lat:.6f},{s.lng:.6f}")
+            params["waypoints"] = "|".join(segs)
 
     return "https://www.google.com/maps/dir/?" + urlencode(params)
 

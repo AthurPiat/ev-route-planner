@@ -890,9 +890,10 @@ def render_input_view() -> None:
             with st.popover("?", help="Régler la charge visée à l'arrivée",
                             use_container_width=False):
                 st.caption(
-                    "Niveau de batterie minimum souhaité en arrivant à "
-                    "destination. On planifie les recharges pour ne jamais "
-                    "passer sous ce seuil."
+                    "Niveau de charge **visé à l'arrivée** à destination. "
+                    "Pendant le trajet la batterie peut (et va) descendre plus "
+                    "bas ; on dimensionne la dernière recharge pour arriver "
+                    "pile à ce niveau, sans faire le plein inutilement."
                 )
                 st.slider("Charge à l'arrivée (%)", 0, 100,
                           DEFAULT_ARRIVAL_SOC, key="arrival_soc_slider")
@@ -1117,9 +1118,14 @@ def render_trip_body(
             [[min(all_lats), min(all_lngs)], [max(all_lats), max(all_lngs)]],
             padding=(20, 20),
         )
-    # Key includes the plan's signature so any change in route/stops triggers
-    # a new st_folium widget (instead of reusing a cached iframe).
-    content_sig = f"{result.total_km:.0f}_{plan.total_time_s:.0f}_{len(plan.stops)}_{key_suffix}"
+    # Key includes the plan's signature so any change in route/stops/SoC triggers
+    # a new st_folium widget (instead of reusing a cached iframe). On inclut la
+    # SoC de départ et d'arrivée pour que le changement de « charge à l'arrivée »
+    # rafraîchisse toujours la carte, même si km/durée/arrêts coïncident.
+    content_sig = (
+        f"{result.total_km:.0f}_{plan.total_time_s:.0f}_{len(plan.stops)}"
+        f"_{dep_soc:.0f}_{plan.arrival_soc_pct:.0f}_{key_suffix}"
+    )
     st_folium(m, height=420, width=None, returned_objects=[], key=f"map_{content_sig}")
 
 

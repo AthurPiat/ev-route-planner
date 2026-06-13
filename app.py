@@ -129,7 +129,17 @@ def photon_search(query: str) -> list[tuple[str, str]]:
             parts.append(country)
         label = ", ".join(parts) if parts else f"{lat:.3f}, {lng:.3f}"
         results.append((label, f"{lat:.6f},{lng:.6f}"))
-    return results
+    # Dédoublonnage : Photon renvoie souvent plusieurs entités OSM pour une
+    # même ville (nœud + relation administrative…) qui se réduisent au même
+    # libellé. On supprime les doublons en gardant le 1er (ordre conservé).
+    seen: set[str] = set()
+    deduped: list[tuple[str, str]] = []
+    for lbl, coords in results:
+        if lbl in seen:
+            continue
+        seen.add(lbl)
+        deduped.append((lbl, coords))
+    return deduped
 
 
 def _parse_coords(value: str | None) -> tuple[float, float] | None:
@@ -741,6 +751,7 @@ SEARCHBOX_STYLE = {
 VEHICLE_NAME = TESLA_M3_LR["name"]
 VEHICLE_CURRENT_SOC = 67
 VEHICLE_DEFAULT_STYLE = "Dynamique"
+DEFAULT_ARRIVAL_SOC = 20  # charge minimale visée à l'arrivée (%)
 VEHICLE_LOCATION_LABEL = "52 rue de Picpus, 75012 Paris"
 VEHICLE_LOCATION_COORDS = "48.846800,2.394500"
 
@@ -838,9 +849,29 @@ def render_input_view() -> None:
     # via the popovers, otherwise from the defaults.
     soc = st.session_state.get("soc_slider", VEHICLE_CURRENT_SOC)
     driving_style = st.session_state.get("style_radio", VEHICLE_DEFAULT_STYLE)
+    arrival_soc = st.session_state.get("arrival_soc_slider", DEFAULT_ARRIVAL_SOC)
 
-    # Three-line info block, no card background. Lines 2 and 3 have a "?"
-    # popover to the right for editing.
+    # Charge visée à l'arrivée (sous le champ Arrivée) + ? popover.
+    arr_col_text, arr_col_help = st.columns([10, 1], vertical_alignment="center")
+    with arr_col_text:
+        st.markdown(
+            f'<div class="info-line">•&nbsp; Charge à l\'arrivée : '
+            f'<b class="info-hl">{arrival_soc} %</b>.</div>',
+            unsafe_allow_html=True,
+        )
+    with arr_col_help:
+        with st.container(key="arrival_help_wrap"):
+            with st.popover("?", help="Régler la charge visée à l'arrivée",
+                            use_container_width=False):
+                st.caption(
+                    "Niveau de batterie minimum souhaité en arrivant à "
+                    "destination. On planifie les recharges pour ne jamais "
+                    "passer sous ce seuil."
+                )
+                st.slider("Charge à l'arrivée (%)", 0, 100,
+                          DEFAULT_ARRIVAL_SOC, key="arrival_soc_slider")
+
+    # Info block, no card background. Editable lines have a "?" popover.
     st.markdown(
         f'<div class="info-line">•&nbsp; Votre véhicule est une '
         f'<b class="info-hl">{VEHICLE_NAME}</b>.</div>',
@@ -904,6 +935,7 @@ def render_input_view() -> None:
                 "destination": destination,
                 "soc": soc,
                 "driving_style": driving_style,
+                "arrival_soc": arrival_soc,
             }
             st.session_state.pop("result_data", None)
             st.session_state.step = "loading"
@@ -1229,20 +1261,27 @@ def _compute_route_base(
     return {"result": result, "meta": meta, "df": df}
 
 
-def _compute_one_plan(base: dict, soc, model, mode: str, fast_plan=None) -> dict:
-    """Phase 2 (fast): plan_trip + TomTom availability + cost for a single mode."""
+def _compute_one_plan(base: dict, soc, model, mode: str, fast_plan=None,
+                      min_soc_pct: float = 10.0) -> dict:
+    """Phase 2 (fast): plan_trip + TomTom availability + cost for a single mode.
+    `min_soc_pct` = charge minimale visée à l'arrivée (et plancher de SoC)."""
     result = base["result"]
     df = base["df"]
     tomtom_key = get_secret("TOMTOM_API_KEY")
 
     if mode == "fast":
-        plan = plan_trip(result, df, model, initial_soc_pct=soc, mode="fast")
+        plan = plan_trip(result, df, model, initial_soc_pct=soc, mode="fast",
+                         min_soc_pct=min_soc_pct)
     else:
-        fast_for_budget = fast_plan or plan_trip(result, df, model, initial_soc_pct=soc, mode="fast")
+        fast_for_budget = fast_plan or plan_trip(
+            result, df, model, initial_soc_pct=soc, mode="fast",
+            min_soc_pct=min_soc_pct)
         budget = fast_for_budget.total_time_s * 1.20
-        plan = plan_trip(result, df, model, initial_soc_pct=soc, mode="eco", price_weight=40.0)
+        plan = plan_trip(result, df, model, initial_soc_pct=soc, mode="eco",
+                         price_weight=40.0, min_soc_pct=min_soc_pct)
         for pw in (400.0, 250.0, 150.0, 80.0, 40.0):
-            cand = plan_trip(result, df, model, initial_soc_pct=soc, mode="eco", price_weight=pw)
+            cand = plan_trip(result, df, model, initial_soc_pct=soc, mode="eco",
+                             price_weight=pw, min_soc_pct=min_soc_pct)
             if cand.feasible and cand.total_time_s <= budget:
                 plan = cand
                 break
@@ -1273,13 +1312,15 @@ def _compute_one_plan(base: dict, soc, model, mode: str, fast_plan=None) -> dict
 
 def _compute_variant_full(
     origin_coords, destination_coords, soc, model, df_all, avoid_tolls,
+    min_soc_pct: float = 10.0,
 ) -> dict:
     """Compute the FULL variant (both modes) — used by background threads."""
     base = _compute_route_base(
         origin_coords, destination_coords, soc, model, df_all, avoid_tolls,
     )
-    fast_data = _compute_one_plan(base, soc, model, "fast")
-    eco_data = _compute_one_plan(base, soc, model, "eco", fast_plan=fast_data["plan"])
+    fast_data = _compute_one_plan(base, soc, model, "fast", min_soc_pct=min_soc_pct)
+    eco_data = _compute_one_plan(base, soc, model, "eco",
+                                 fast_plan=fast_data["plan"], min_soc_pct=min_soc_pct)
     return {
         "result": base["result"],
         "meta": base["meta"],
@@ -1306,17 +1347,20 @@ def compute_pipeline(inputs: dict) -> dict:
     model = apply_driving_style(TESLA_M3_LR, inputs["driving_style"])
     df_all = get_irve_cached()
     soc = inputs["soc"]
+    arrival_soc = inputs.get("arrival_soc", DEFAULT_ARRIVAL_SOC)
 
     # Compute the toll base (HERE + enrich + stations) and the fast plan only.
     base_toll = _compute_route_base(
         origin_coords, destination_coords, soc, model, df_all, avoid_tolls=False,
     )
-    fast_toll = _compute_one_plan(base_toll, soc, model, "fast")
+    fast_toll = _compute_one_plan(base_toll, soc, model, "fast",
+                                  min_soc_pct=arrival_soc)
 
     return {
         "origin": origin_coords,
         "destination": destination_coords,
         "soc": soc,
+        "arrival_soc": arrival_soc,
         "model": model,
         "variants": {
             "toll": {
@@ -1426,17 +1470,18 @@ def render_result_view() -> None:
         st.session_state.bg_executor = executor
         df_all = get_irve_cached()
         toll_base = data["variants"]["toll"].get("_base")
+        arrival_soc = data.get("arrival_soc", DEFAULT_ARRIVAL_SOC)
         # Thread 1: eco for toll variant — reuses HERE+enrich already done.
         if toll_base:
             st.session_state.bg_eco_toll = executor.submit(
                 _compute_one_plan, toll_base, data["soc"], data["model"], "eco",
-                data["variants"]["toll"]["plans"]["fast"],
+                data["variants"]["toll"]["plans"]["fast"], arrival_soc,
             )
         # Thread 2: full no-toll variant (HERE + enrich + fast + eco).
         st.session_state.bg_notoll = executor.submit(
             _compute_variant_full,
             data["origin"], data["destination"],
-            data["soc"], data["model"], df_all, True,
+            data["soc"], data["model"], df_all, True, arrival_soc,
         )
 
     def _ensure_eco_toll() -> None:
@@ -1450,6 +1495,7 @@ def render_result_view() -> None:
             eco_data = _compute_one_plan(
                 toll_base, data["soc"], data["model"], "eco",
                 data["variants"]["toll"]["plans"]["fast"],
+                data.get("arrival_soc", DEFAULT_ARRIVAL_SOC),
             )
         else:
             spin_text = "Finalisation du mode économique…" if not future.done() else None
@@ -1474,6 +1520,7 @@ def render_result_view() -> None:
             data["variants"]["notoll"] = _compute_variant_full(
                 data["origin"], data["destination"],
                 data["soc"], data["model"], df_all, True,
+                data.get("arrival_soc", DEFAULT_ARRIVAL_SOC),
             )
         else:
             spin_text = "Finalisation du trajet sans péage…" if not future.done() else None

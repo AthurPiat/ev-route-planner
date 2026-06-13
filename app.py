@@ -1775,31 +1775,15 @@ def render_result_view() -> None:
         origin_place_id=origin_pid, origin_label=origin_label,
     )
     waze_url = waze_nav_url(data["destination"], plan.stops)
-    # Logo Google Maps (pin 4 couleurs simplifié) et logo Waze (ghost).
-    _gmaps_svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48">'
-        '<path fill="#1C9957" d="M42 24c0-9.9-8.1-18-18-18c-2 0-3.9.3-5.7.9l9.7 8.2l8 24.7C39.7 35.8 42 30.2 42 24z"/>'
-        '<path fill="#4285F4" d="M24 6c2 0 3.9.3 5.7.9L21.4 26H6.8C6.3 25.4 6 24.7 6 24C6 14.1 14.1 6 24 6z"/>'
-        '<path fill="#FBBC04" d="M36 39.8L28 15.1l-6.6 10.9H6.8c.4 3.4 1.9 6.4 4.1 8.8L24 46l12-6.2z"/>'
-        '<path fill="#EA4335" d="M10.9 34.8c2.8 3.5 7 6 10.9 11l.2.2l12-6.2L28 15.1l-6.6 10.9H6.8c.2.3.3.5.5.8l3.6 8z"/>'
-        '<circle fill="white" cx="24" cy="24" r="5.5"/>'
-        '<circle fill="#1A73E8" cx="24" cy="24" r="3.5"/>'
-        '</svg>'
-    )
-    _waze_svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48">'
-        '<path fill="white" stroke="#03060D" stroke-width="2" d="M24 4C13 4 4 13 4 24c0 4.5 1.5 8.6 4 12 0 0 1.5 2 3 3s3 .5 3-.5c0-.8-.5-1.5-1-2c-1.5-1.5-2.5-3.5-2.5-3.5'
-        'C9 31 8 27.6 8 24c0-8.8 7.2-16 16-16s16 7.2 16 16c0 3.6-1 7-3 9.5l-2.5 3.5c-.5.5-1 1.2-1 2c0 1 1.5 1.5 3 .5s3-3 3-3'
-        'c2.5-3.4 4-7.5 4-12C44 13 35 4 24 4z"/>'
-        '<circle fill="#03060D" cx="18" cy="21" r="3"/>'
-        '<circle fill="#03060D" cx="30" cy="21" r="3"/>'
-        '<path fill="none" stroke="#03060D" stroke-width="2.5" stroke-linecap="round" d="M17 30c2 3 5 4 7 4s5-1 7-4"/>'
-        '</svg>'
-    )
+    # Logos officiels en base64 (24×24 px) — pas de dépendance CDN.
+    _gmaps_icon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAEbUlEQVR42qVWW2yURRT+zsz/b7vdLhXoRcSI2Kq4GrmUVomaGiXhAZQU+DeYQCNL2y22BDRGvOHuSoz4ZFBjxKAkasDshhIkQlCxQjXRKLdEloBRMYaLRdNStt3bP+f4AI1G2rLgeZnMzMn5zpnvmzMDjGKRSEQRgMlP/lx/w5reXROf7umveupsbtpLqSNz1g+ELzkpQGikGCNuwIlrJIIGz8q8CUh9bIN9mewA+z2WuXlsmW15PMgNpjZ2vehvQ0QUYsTDhVHDLQqgkHBY7gvc1Hm8/SOvSfnOu8b4fWVqcmWFTWKQG0zli8aUhmevkxbEiJ246IIB0NCgAJJTxf72xtT+ss3HVqcn5c7Br/mzyqVedY38pSxluYPsDpS/u6rmRE1RIojCK8C+fQYAbDEP9ZFfHkif8HaeDb9+OOYPffac/3ll9zUqLnEz3p25XOW2KeMOzpgCkEAi6ooAAhABIrW1NmkZJ4NEmbvSqH7hq23xeMTT1RUp7lpT3Z21Dh3PXr/Vq9UYbVgqAcBJJC/j1BqR9XkHjOy9J22Vp+Fd8Avy5626YPDlbwFB/YZdN2aq3pwolAHcIpBtBkbSynBHJOI4mmJg5c8f8wVPimvnDeVp3cAXul0+x7yKCW/ETdHAWIgtbMwFV9RPAJBwElwYB4EEAYC/5dhWVdNPktICQllJqfvWluztO3/XY2dR2nWtElsRsOdwMHHOiTsaBCkIgGJwRaCKGtM73D58Y5eSZUnefN9b1f/KhWlZO58zZBOZbD4PcAwAAk5AClfREBDBGKVb4ZpML3vNM/31Ho/iIiUiusSjOS9rf1i8/Ucn7ugYxfiqAIjAEocunp1LIq1WxzL1ntPG5/Fw3qgSj+VeyH154LFtrzlxRyeCCb4akv8BCcJEIg0WzeGNe1OVe8b5RBmliXOmz7gSAoDE0YBcVPc1AABA8s5KEWEao7OrTNYMWj6PYddf+2hJ528NXQ0WYjHG/zUn7mgAqN2y8JO6hMNTt8+/DgKCjNIsC60AAHqO9hAERIq3c958eqRxR18kGqHhZDm8idCorXuoB3Y1WPfGHe8lXyowttA1nhxFIheb29A44oPT3Nx+W8YyfdVVVX8O5xSNRiUYDKpAIEDJZFICgYDE/kOuiFA0Gr082abl4Y5lrR1rlz4enj9auk1NrdVNy8KLhubLlz9R09Kyog4AQq0r5o5YQVOoLfbB++9Em8MrF7rsnhamhwHTzZAqxWoC2Xo/WB5hZiWgM4qkQoS+8xTTKXapTVi6SeFuZu62tCoGYBsAJOglSLmePmPmgtoZdScNyVxmflSBd4NoMYE8THQGIh2skFCCeiLcIYRbSOigEPcAqlwRfGCcUYpuJcGDAA0A8gcJ7gcwXk+tndlLWjWymz9owd6otJ7rGtMJRYOKqYJI4hq0SEiIiD5k5hwISdj6nM7j5Hub3t5dN7Ou9OK1wK8ATWKSXtLW1woYf0WpLGnumBxqbd+wNNQ6q5CfSaht5fR/7/4NJwz/J1jWbXoAAAAASUVORK5CYII="
+    _waze_icon = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAFzklEQVR42oWWb2zVVxnHP+ec3/3TlkILa9ciAoXYMLUDcreKiA3DTRgME/8sTkMNsALGRDDLahanZUUI6gT2ptCRkIoZm7pqyEpZg0hmJ5mj1S6yDbwdHQVabKGDlnvb3nt/5zy+uO29ZWp8kvPmOc85z3m+z/N8n6N2iuh6pdzSt2WNyaEWyxfF4gGKSREHTgDJqFAatGaKiDL4GN60Yzzf9TnVtlNEK4Cl52STl8sRQLnxKUecA0DnaHQIlJnUg0uCHZW0c20yR3Q47cwf5cmuStWkIh3yiM7llBtHxOGUIm1tHTpPo4MQe/cisfe7GP/wAjhLoHQeeYvuZ/qSZegQ+MMuE40IVmm0DqPcKF9WkU55U4dZYcewk5eL9QkUeNzpOMdQ014+eec6Sz5VxqLyckDou36dv51/jw9cDuGv1FD0tW/hj7g0qkohgjU5GDfNVbX+uoibnpNlFrxgYUcTvLUyYv9v14VxOHw3ej6pwMXlqkGptm/Exg1VFeYnV8NTS6NaKKABFXPZSuSNAiYtvHEbLk5AoxfzSnA6Dq6BooWupgjcVbQ1CLoCNnt7KtIiEEgb2L8c6k0EHkuInsc8EHgoCUceiZnmHKpCXWQuMq5S9xUETsjWQ08L5G0UjjhpqERx3MLOJkjqiIkGtNaUSqWIhFLVJvG6rxVOhOebI4lCN7cLHde00cDmhmhRXGTXlStX6Ojo4ODBg0xNTeGcQ0QW1RVCvRE2pmHKzQHruDyNPrSlI3d8oykWi+zbtw+tNf39/Zw+fRpjDPl8fl79zJkzKKXxlCWXhmmZC8Q8D5xEGZ/V2Pd9Ojs7GR0dZdmyZbS2tiIiJJNJtmzZwujoKM3NzdU6aGbc/JHisWC+zDioq+QvkUhw7Ngx1qxZQy6XY8OGDTjnqKmpoa+vj1WrVtHe3k4ulyOwDqM1gcxvoNoGI9c8BX8F8PZKeOHByBNPQRiGeJ5X3ZWuBE9EqumylXoosHMY/qyMEYlLJEBCweV8xWQbAnD06FF6e3urDcIwJAgClFIUCgW2bdvGZKGAAoYLwh8x8EUpShs4Pw4Xx8HTCivQ2dFBf38/AwMDeJ6H53n4vk+hWKSnp4eHV6wgUZuiGDpOjkLZzX8PqhLF01Rr4EIWEoSgPC5fusSe7m6y2Sxr166lXC5z7tw5stksp06dAkLeHTH0/qpoSUQY/9hgdkTPOMjVCXsfVaxLgFiLZwzHT7xDoVSiPDPDzu1bWb+xnfv5ST6QNO//JEy5aO7IvBQJLj6PnEASx5czih8/u8FjH/Zx/eYPdO/t5vUD+6t//P7Oz7y2+1WGb95ifPtu6p59BbPwpBPconGNCCAY3xIc2Ut56DymMUN5fIw9x98juX4zweQ0Z988QH7wc9IPZPAm7+MOn0Vym6FkQZvquNauzFWdQolgq52Nxk6WMb/dItWUIVGTYomvOfnVDfrue5z4xcLIbZZmMqhkCotC7lwHPyIogtUplCtzVWM4JEKofbQIFqUgCCGTQrp24SbGkHsj2JbVZJ55meaikGlZgurahZ0Yg3sjsHw1bH0JSiBK2wpWiOHQfxz6DoyD776Gu8Pw9ItQl45MUrJ4rT4NgRNdrxXED/3/+2ypARJAEWIismgtdE7V6kWfLX8DectGiubtwXgAAAAASUVORK5CYII="
     st.markdown(
         f'<div class="nav-buttons">'
-        f'<a href="{nav_url}" target="_blank" rel="noopener">{_gmaps_svg} Google Maps</a>'
-        f'<a href="{waze_url}" target="_blank" rel="noopener">{_waze_svg} Waze</a>'
+        f'<a href="{nav_url}" target="_blank" rel="noopener">'
+        f'<img src="{_gmaps_icon}" width="22" height="22" alt="Google Maps"/> Google Maps</a>'
+        f'<a href="{waze_url}" target="_blank" rel="noopener">'
+        f'<img src="{_waze_icon}" width="22" height="22" alt="Waze"/> Waze</a>'
         f'</div>',
         unsafe_allow_html=True,
     )

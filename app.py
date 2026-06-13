@@ -804,13 +804,18 @@ def render_input_view() -> None:
     # Silent auto-geolocation. get_geolocation() is asynchronous: first
     # render returns None while the browser prompt is up; once the user
     # grants permission, the JS resolves and Streamlit reruns.
-    if "geoloc_coords" not in st.session_state:
+    # IMPORTANT: on marque _geoloc_done dès qu'on reçoit un résultat (même
+    # sans coords) pour ne PAS rappeler get_geolocation() à chaque rerun —
+    # sinon la boucle infinie de reruns efface le texte du searchbox.
+    if "geoloc_coords" not in st.session_state and not st.session_state.get("_geoloc_done"):
         loc = get_geolocation()
-        if loc and loc.get("coords"):
-            lat = float(loc["coords"]["latitude"])
-            lng = float(loc["coords"]["longitude"])
-            st.session_state.geoloc_coords = f"{lat:.6f},{lng:.6f}"
-            st.session_state.geoloc_label = _reverse_geocode(lat, lng)
+        if loc is not None:
+            st.session_state._geoloc_done = True
+            if loc.get("coords"):
+                lat = float(loc["coords"]["latitude"])
+                lng = float(loc["coords"]["longitude"])
+                st.session_state.geoloc_coords = f"{lat:.6f},{lng:.6f}"
+                st.session_state.geoloc_label = _reverse_geocode(lat, lng)
 
     # Default mode: GPS if available, else vehicle.
     if "origin_mode" not in st.session_state:
@@ -833,7 +838,6 @@ def render_input_view() -> None:
                 placeholder="Saisir une adresse de départ",
                 style_overrides=SEARCHBOX_STYLE,
                 debounce=400,
-                rerun_on_update=False,
             )
             if typed:
                 st.session_state.typed_origin_coords = typed
@@ -870,7 +874,6 @@ def render_input_view() -> None:
             placeholder="Arrivée",
             style_overrides=SEARCHBOX_STYLE,
             debounce=400,
-            rerun_on_update=False,
         )
     with col_arr_pad:
         st.empty()

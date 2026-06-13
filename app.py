@@ -20,6 +20,7 @@ from streamlit_searchbox import st_searchbox
 
 from availability import fetch_availability
 from enrichment import enrich_route
+from navlink import gmaps_nav_url
 from pricing import estimate_price_per_kwh, estimate_stop_cost
 from providers import (
     DRIVING_STYLES,
@@ -1588,9 +1589,13 @@ def render_result_view() -> None:
     }
     render_trip_body(result, plan, data["origin"], data["destination"], meta, f"{mode_key}_{toll_key}")
 
-    # Big primary button after the map: easy way to plan another trip.
+    # Big primary CTA after the map: launch Google Maps navigation with the
+    # charging stops injected as waypoints (direct route if there's no stop).
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-    if st.button("Calculer un autre trajet", type="primary", key="back_btn_bottom",
+    nav_url = gmaps_nav_url(data["origin"], data["destination"], plan.stops)
+    st.link_button("On y va", nav_url, type="primary", use_container_width=True)
+    # Keep a discreet way back to plan another trip.
+    if st.button("↺ Calculer un autre trajet", key="back_btn_bottom",
                  use_container_width=True):
         _back_to_input()
         st.rerun()

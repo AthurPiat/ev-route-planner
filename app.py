@@ -538,6 +538,28 @@ st.markdown(
         transform: translateY(0);
     }
 
+    /* Boutons navigation Google Maps / Waze — vert Qivia, texte noir, logos. */
+    .nav-buttons {
+        display: flex; gap: 0.6rem; margin: 0.8rem 0 0.4rem;
+    }
+    .nav-buttons a {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        gap: 0.5rem; padding: 0.7rem 1rem;
+        background: #5FFFA7; color: #03060D !important;
+        border-radius: 10px; text-decoration: none !important;
+        font-weight: 700; font-size: 0.95rem;
+        font-family: "Plus Jakarta Sans", -apple-system, sans-serif;
+        transition: all 0.15s ease;
+        box-shadow: 0 0 12px rgba(95,255,167,0.3);
+    }
+    .nav-buttons a:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 0 20px rgba(95,255,167,0.55);
+        filter: brightness(1.05);
+    }
+    .nav-buttons a:active { transform: translateY(0); }
+    .nav-buttons a svg { flex-shrink: 0; }
+
     /* 3 lignes d'info véhicule, directement sur le fond noir (pas de carte). */
     .info-line {
         color: #FFFFFF;
@@ -838,6 +860,7 @@ def render_input_view() -> None:
                 placeholder="Saisir une adresse de départ",
                 style_overrides=SEARCHBOX_STYLE,
                 debounce=400,
+                min_execution_time=250,
             )
             if typed:
                 st.session_state.typed_origin_coords = typed
@@ -874,6 +897,7 @@ def render_input_view() -> None:
             placeholder="Arrivée",
             style_overrides=SEARCHBOX_STYLE,
             debounce=400,
+            min_execution_time=250,
         )
     with col_arr_pad:
         st.empty()
@@ -1751,11 +1775,34 @@ def render_result_view() -> None:
         origin_place_id=origin_pid, origin_label=origin_label,
     )
     waze_url = waze_nav_url(data["destination"], plan.stops)
-    col_gmaps, col_waze = st.columns(2)
-    with col_gmaps:
-        st.link_button("🗺️ Google Maps", nav_url, type="primary", use_container_width=True)
-    with col_waze:
-        st.link_button("🟣 Waze", waze_url, type="secondary", use_container_width=True)
+    # Logo Google Maps (pin 4 couleurs simplifié) et logo Waze (ghost).
+    _gmaps_svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48">'
+        '<path fill="#1C9957" d="M42 24c0-9.9-8.1-18-18-18c-2 0-3.9.3-5.7.9l9.7 8.2l8 24.7C39.7 35.8 42 30.2 42 24z"/>'
+        '<path fill="#4285F4" d="M24 6c2 0 3.9.3 5.7.9L21.4 26H6.8C6.3 25.4 6 24.7 6 24C6 14.1 14.1 6 24 6z"/>'
+        '<path fill="#FBBC04" d="M36 39.8L28 15.1l-6.6 10.9H6.8c.4 3.4 1.9 6.4 4.1 8.8L24 46l12-6.2z"/>'
+        '<path fill="#EA4335" d="M10.9 34.8c2.8 3.5 7 6 10.9 11l.2.2l12-6.2L28 15.1l-6.6 10.9H6.8c.2.3.3.5.5.8l3.6 8z"/>'
+        '<circle fill="white" cx="24" cy="24" r="5.5"/>'
+        '<circle fill="#1A73E8" cx="24" cy="24" r="3.5"/>'
+        '</svg>'
+    )
+    _waze_svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48">'
+        '<path fill="white" stroke="#03060D" stroke-width="2" d="M24 4C13 4 4 13 4 24c0 4.5 1.5 8.6 4 12 0 0 1.5 2 3 3s3 .5 3-.5c0-.8-.5-1.5-1-2c-1.5-1.5-2.5-3.5-2.5-3.5'
+        'C9 31 8 27.6 8 24c0-8.8 7.2-16 16-16s16 7.2 16 16c0 3.6-1 7-3 9.5l-2.5 3.5c-.5.5-1 1.2-1 2c0 1 1.5 1.5 3 .5s3-3 3-3'
+        'c2.5-3.4 4-7.5 4-12C44 13 35 4 24 4z"/>'
+        '<circle fill="#03060D" cx="18" cy="21" r="3"/>'
+        '<circle fill="#03060D" cx="30" cy="21" r="3"/>'
+        '<path fill="none" stroke="#03060D" stroke-width="2.5" stroke-linecap="round" d="M17 30c2 3 5 4 7 4s5-1 7-4"/>'
+        '</svg>'
+    )
+    st.markdown(
+        f'<div class="nav-buttons">'
+        f'<a href="{nav_url}" target="_blank" rel="noopener">{_gmaps_svg} Google Maps</a>'
+        f'<a href="{waze_url}" target="_blank" rel="noopener">{_waze_svg} Waze</a>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
     # Keep a discreet way back to plan another trip.
     if st.button("↺ Calculer un autre trajet", key="back_btn_bottom",
                  use_container_width=True):

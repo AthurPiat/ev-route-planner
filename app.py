@@ -20,7 +20,7 @@ from streamlit_searchbox import st_searchbox
 
 from availability import fetch_availability
 from enrichment import enrich_route
-from navlink import gmaps_nav_url
+from navlink import find_place_id, gmaps_nav_url
 from pricing import estimate_price_per_kwh, estimate_stop_cost
 from providers import (
     DRIVING_STYLES,
@@ -183,6 +183,13 @@ def _reverse_geocode(lat: float, lng: float) -> str:
         return ", ".join(parts) if parts else f"{lat:.4f}, {lng:.4f}"
     except Exception:
         return f"{lat:.4f}, {lng:.4f}"
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _gmaps_place_id(lat: float, lng: float, query: str) -> str | None:
+    """Place_id Google pour une borne/destination (None si pas de clé ou
+    aucun candidat fiable à < 350 m). Mis en cache 24 h."""
+    return find_place_id(lat, lng, query, get_secret("GOOGLE_MAPS_API_KEY"))
 
 
 def soc_color(soc: float) -> str:
@@ -1592,7 +1599,27 @@ def render_result_view() -> None:
     # Big primary CTA after the map: launch Google Maps navigation with the
     # charging stops injected as waypoints (direct route if there's no stop).
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
-    nav_url = gmaps_nav_url(data["origin"], data["destination"], plan.stops)
+    # Optionnel : résoudre des place_ids Google pour afficher le NOM des étapes
+    # (au lieu de « Repère placé »). Sans clé ou sans match fiable, on garde les
+    # coordonnées exactes — la navigation n'est jamais dégradée.
+    stop_pids = None
+    dest_pid = None
+    if get_secret("GOOGLE_MAPS_API_KEY"):
+        stop_pids = [
+            _gmaps_place_id(
+                s.lat, s.lng,
+                " ".join(p for p in (s.name, s.city) if p) or s.operator,
+            )
+            for s in plan.stops
+        ]
+        dest_lat, dest_lng = data["destination"]
+        dest_pid = _gmaps_place_id(
+            dest_lat, dest_lng, _reverse_geocode(dest_lat, dest_lng)
+        )
+    nav_url = gmaps_nav_url(
+        data["origin"], data["destination"], plan.stops,
+        stop_place_ids=stop_pids, destination_place_id=dest_pid,
+    )
     st.link_button("On y va", nav_url, type="primary", use_container_width=True)
     # Keep a discreet way back to plan another trip.
     if st.button("↺ Calculer un autre trajet", key="back_btn_bottom",

@@ -44,9 +44,8 @@ MODE_PARAMS: dict[str, dict[str, float]] = {
 # Marge de sécurité (points de SoC) ajoutée à la charge visée à l'arrivée.
 # Le DERNIER arrêt ne recharge que le nécessaire pour arriver à
 # `min_arrival_destination_pct + ARRIVAL_MARGIN_PCT` (au lieu de remplir
-# jusqu'à la cible du mode). Petit coussin contre l'optimisme du modèle de
-# consommation. Mettre à 0 pour coller exactement à la demande.
-ARRIVAL_MARGIN_PCT = 3.0
+# jusqu'à la cible du mode). À 0 : on colle exactement à la demande.
+ARRIVAL_MARGIN_PCT = 0.0
 
 
 def _effective_kw(station_power: float, vehicle_max_dc: float, target_leave_pct: float) -> float:
